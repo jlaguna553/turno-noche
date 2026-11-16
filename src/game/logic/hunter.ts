@@ -24,6 +24,8 @@ export interface Decision {
   alerted: boolean;
   /** Hay vision directa y esta cazando. */
   seesPlayer: boolean;
+  /** Hacia donde investiga: el jugador o un ruido lanzado. */
+  target: 'player' | 'lure';
 }
 
 export interface HunterTuning {
@@ -42,6 +44,8 @@ export class HunterBrain {
   aggression: number;
   private lostFor = 0;
   private investigateFor = 0;
+  private lurePoint: { x: number; z: number } | null = null;
+  private lureFor = 0;
 
   constructor(tuning: HunterTuning = { aggression: 0 }) {
     this.aggression = tuning.aggression;
@@ -53,6 +57,30 @@ export class HunterBrain {
     this.suspicion = 0;
     this.lostFor = 0;
     this.investigateFor = 0;
+    this.lurePoint = null;
+    this.lureFor = 0;
+  }
+
+  /**
+   * Un ruido exterior (botella, chicharra, cria) fija un punto de
+   * investigacion. El jugador puede usarlo para apartarla de su ruta.
+   */
+  hearNoise(x: number, z: number, strength = 1): void {
+    const clamped = Math.max(0, Math.min(1, strength));
+    this.lurePoint = { x, z };
+    this.lureFor = 5.5 + clamped * 3;
+    this.suspicion = Math.max(this.suspicion, 0.55 + clamped * 0.3);
+    if (this.state !== 'hunt') this.state = 'investigate';
+    this.investigateFor = 0;
+  }
+
+  get lure(): { x: number; z: number } | null {
+    return this.lureFor > 0 ? this.lurePoint : null;
+  }
+
+  clearLure(): void {
+    this.lureFor = 0;
+    this.lurePoint = null;
   }
 
   private get viewRange(): number {
@@ -64,6 +92,10 @@ export class HunterBrain {
   }
 
   update(dt: number, senses: Senses): Decision {
+    if (this.lureFor > 0) {
+      this.lureFor = Math.max(0, this.lureFor - dt);
+      if (this.lureFor === 0) this.lurePoint = null;
+    }
     const fov = MONSTER.fovRadians + this.aggression * 0.25;
     const inCone = senses.angle <= fov && !senses.hidden;
     const range = this.viewRange * (senses.flashlight ? 1.55 : 1);
@@ -124,12 +156,16 @@ export class HunterBrain {
           ? base * 1.75
           : base;
 
+    const target: 'player' | 'lure' =
+      state === 'investigate' && this.lure && !seen ? 'lure' : 'player';
+
     return {
       state,
       speed,
       suspicion: this.suspicion,
       alerted,
       seesPlayer: seen,
+      target,
     };
   }
 }

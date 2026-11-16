@@ -1096,3 +1096,549 @@ export function createBulkhead(ctx: PropContext, spec: PropSpec): THREE.Group {
   ctx.scene.add(group);
   return group;
 }
+
+// ------------------------------------------------------- v1.1: ala este/oeste
+
+export interface TagActor {
+  entity: Entity;
+  group: THREE.Group;
+  take(): void;
+  update(elapsed: number): void;
+}
+
+export function createTag(ctx: PropContext, spec: PropSpec): TagActor {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0.3, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(0.19, 0.11, 0.018),
+    new THREE.MeshStandardMaterial({
+      color: 0xb99a55,
+      metalness: 0.85,
+      roughness: 0.32,
+      emissive: 0x3a2608,
+      emissiveIntensity: 0.55,
+    }),
+  );
+  group.add(plate);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 5, 10), ctx.materials.materials.pipe);
+  ring.position.set(0, 0.09, 0);
+  group.add(ring);
+  for (let i = 0; i < 3; i += 1) {
+    const link = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.006, 4, 8), ctx.materials.materials.pipe);
+    link.position.set(0, 0.13 + i * 0.035, 0);
+    link.rotation.x = Math.PI / 2;
+    group.add(link);
+  }
+  ctx.scene.add(group);
+  const collider = ctx.physics.addStaticBox({
+    center: new THREE.Vector3(spec.x, spec.y ?? 0.3, spec.z),
+    halfExtents: new THREE.Vector3(0.22, 0.26, 0.14),
+    rotationY: spec.rotationY ?? 0,
+  });
+
+  const actor: TagActor = {
+    group,
+    entity: new Entity({
+      id: spec.id,
+      kind: 'tag',
+      label: 'PLACA DE TRIPULACIÓN',
+      prompt: '[E] Recoger placa',
+      root: group,
+      collider,
+    }),
+    take(): void {
+      group.visible = false;
+      actor.entity.enabled = false;
+    },
+    update(elapsed: number): void {
+      plate.material.emissiveIntensity = 0.4 + Math.abs(Math.sin(elapsed * 1.7)) * 0.35;
+    },
+  };
+  return actor;
+}
+
+export interface FuseActor {
+  entity: Entity;
+  group: THREE.Group;
+  take(): void;
+  update(elapsed: number): void;
+}
+
+export function createFuse(ctx: PropContext, spec: PropSpec): FuseActor {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 1.3, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.14), ctx.materials.materials.metalPanel);
+  group.add(box);
+  const socket = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.03), ctx.materials.materials.rust);
+  socket.position.set(0, -0.02, 0.08);
+  group.add(socket);
+  const glassMaterial = new THREE.MeshStandardMaterial({
+    color: 0x6f8f7a,
+    emissive: 0x2a7a46,
+    emissiveIntensity: 1.3,
+    roughness: 0.2,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.85,
+  });
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 8), glassMaterial);
+  glass.rotation.z = Math.PI / 2;
+  glass.position.set(0, 0.02, 0.12);
+  group.add(glass);
+  for (const x of [-0.11, 0.11]) {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.03, 8), ctx.materials.materials.pipe);
+    cap.rotation.z = Math.PI / 2;
+    cap.position.set(x, 0.02, 0.12);
+    group.add(cap);
+  }
+  ctx.scene.add(group);
+  const collider = ctx.physics.addStaticBox({
+    center: new THREE.Vector3(spec.x, spec.y ?? 1.3, spec.z),
+    halfExtents: new THREE.Vector3(0.18, 0.26, 0.12),
+    rotationY: spec.rotationY ?? 0,
+  });
+
+  const actor: FuseActor = {
+    group,
+    entity: new Entity({
+      id: spec.id,
+      kind: 'fuse',
+      label: 'FUSIBLE DE EMERGENCIA',
+      prompt: '[E] Extraer fusible',
+      root: group,
+      collider,
+    }),
+    take(): void {
+      group.visible = false;
+      actor.entity.enabled = false;
+    },
+    update(elapsed: number): void {
+      glassMaterial.emissiveIntensity = 0.9 + Math.abs(Math.sin(elapsed * 3.1)) * 0.8;
+    },
+  };
+  return actor;
+}
+
+export interface BottleActor {
+  entity: Entity;
+  group: THREE.Group;
+  take(): void;
+  update(elapsed: number): void;
+}
+
+export function createBottlePickup(ctx: PropContext, spec: PropSpec): BottleActor {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0.2, spec.z);
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0x2f4a35,
+    roughness: 0.18,
+    metalness: 0.05,
+    transparent: true,
+    opacity: 0.9,
+  });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.085, 0.24, 9), glass);
+  body.position.y = 0.12;
+  group.add(body);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.12, 8), glass);
+  neck.position.y = 0.3;
+  group.add(neck);
+  const label = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.072, 0.072, 0.08, 9),
+    new THREE.MeshStandardMaterial({ color: 0xb9ae8a, roughness: 0.9 }),
+  );
+  label.position.y = 0.14;
+  group.add(label);
+  ctx.scene.add(group);
+  const collider = ctx.physics.addStaticBox({
+    center: new THREE.Vector3(spec.x, (spec.y ?? 0.2) + 0.18, spec.z),
+    halfExtents: new THREE.Vector3(0.14, 0.3, 0.14),
+  });
+
+  const actor: BottleActor = {
+    group,
+    entity: new Entity({
+      id: spec.id,
+      kind: 'bottle',
+      label: 'BOTELLA',
+      prompt: '[E] Recoger botella',
+      root: group,
+      collider,
+    }),
+    take(): void {
+      group.visible = false;
+      actor.entity.enabled = false;
+    },
+    update(elapsed: number): void {
+      group.rotation.y = elapsed * 0.25;
+    },
+  };
+  return actor;
+}
+
+export function createFilingCabinet(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const body = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.72, 1.45, 0.58), ctx.materials.materials.metalPanel));
+  body.position.y = 0.725;
+  group.add(body);
+  for (let i = 0; i < 4; i += 1) {
+    const drawer = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.3, 0.04), ctx.materials.materials.door);
+    drawer.position.set(0, 1.25 - i * 0.33, 0.3);
+    group.add(drawer);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.025, 0.035), ctx.materials.materials.pipe);
+    handle.position.set(0, 1.25 - i * 0.33, 0.33);
+    group.add(handle);
+  }
+  ctx.scene.add(group);
+  ctx.physics.addStaticBox({
+    center: new THREE.Vector3(spec.x, 0.72, spec.z),
+    halfExtents: new THREE.Vector3(0.38, 0.72, 0.3),
+    rotationY: spec.rotationY ?? 0,
+  });
+  return group;
+}
+
+export function createSafe(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const body = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.8), ctx.materials.materials.rust));
+  body.position.y = 0.5;
+  group.add(body);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.9, 0.06), ctx.materials.materials.metalPanel);
+  door.position.set(0, 0.5, 0.4);
+  group.add(door);
+  const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.04, 12), ctx.materials.materials.pipe);
+  dial.rotation.x = Math.PI / 2;
+  dial.position.set(0.16, 0.55, 0.45);
+  group.add(dial);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.05), ctx.materials.materials.pipe);
+  handle.position.set(-0.2, 0.5, 0.45);
+  group.add(handle);
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.3, 0.12),
+    new THREE.MeshStandardMaterial({ color: 0xb9ae8a, roughness: 0.7 }),
+  );
+  plate.position.set(0, 0.82, 0.44);
+  group.add(plate);
+  ctx.scene.add(group);
+  ctx.physics.addStaticBox({
+    center: new THREE.Vector3(spec.x, 0.5, spec.z),
+    halfExtents: new THREE.Vector3(0.42, 0.5, 0.42),
+    rotationY: spec.rotationY ?? 0,
+  });
+  return group;
+}
+
+export function createMapBoard(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 1.7, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.15, 0.06), ctx.materials.materials.rust);
+  group.add(frame);
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 300;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.fillStyle = '#9a8f74';
+    context.fillRect(0, 0, 512, 300);
+    context.strokeStyle = '#3c3a2e';
+    context.lineWidth = 2;
+    for (let i = 0; i < 16; i += 1) {
+      context.strokeRect(20 + (i % 4) * 120, 20 + Math.floor(i / 4) * 68, 92, 48);
+    }
+    context.strokeStyle = '#7c1b12';
+    context.lineWidth = 5;
+    context.beginPath();
+    context.moveTo(40, 260);
+    context.lineTo(470, 40);
+    context.stroke();
+    context.fillStyle = '#2b2922';
+    context.font = 'bold 16px monospace';
+    context.fillText('PLANTA BAJA · SECTOR 07', 20, 292);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.74, 1.0),
+    new THREE.MeshStandardMaterial({ map: texture, roughness: 0.92, metalness: 0 }),
+  );
+  board.position.z = 0.035;
+  group.add(board);
+  ctx.scene.add(group);
+  return group;
+}
+
+export function createTypewriter(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0.82, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.12, 0.32), ctx.materials.materials.metalPanel);
+  group.add(base);
+  const paper = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.26, 0.34),
+    new THREE.MeshStandardMaterial({ color: 0xd6cfb4, roughness: 0.95, side: THREE.DoubleSide }),
+  );
+  paper.position.set(0, 0.24, -0.1);
+  paper.rotation.x = -0.22;
+  group.add(paper);
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      const key = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.012, 6), ctx.materials.materials.pipe);
+      key.position.set(-0.16 + col * 0.045, 0.07, -0.02 + row * 0.05);
+      group.add(key);
+    }
+  }
+  ctx.scene.add(group);
+  return group;
+}
+
+export interface SteamActor {
+  group: THREE.Group;
+  burst(): void;
+  update(dt: number, elapsed: number): void;
+}
+
+export function createSteamVent(ctx: PropContext, spec: PropSpec): SteamActor {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0, spec.z);
+  const grate = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.08, 12), ctx.materials.materials.grate);
+  grate.position.y = 0.04;
+  group.add(grate);
+  const puffCanvas = document.createElement('canvas');
+  puffCanvas.width = 64;
+  puffCanvas.height = 64;
+  const context = puffCanvas.getContext('2d');
+  if (context) {
+    const gradient = context.createRadialGradient(32, 32, 2, 32, 32, 30);
+    gradient.addColorStop(0, 'rgba(220,230,220,0.55)');
+    gradient.addColorStop(1, 'rgba(220,230,220,0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 64, 64);
+  }
+  const puffTexture = new THREE.CanvasTexture(puffCanvas);
+  puffTexture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: puffTexture,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const puffs = Array.from({ length: 5 }, () => {
+    const sprite = new THREE.Sprite(material.clone());
+    sprite.position.set(0, 0.1, 0);
+    sprite.scale.setScalar(0.6);
+    group.add(sprite);
+    return sprite;
+  });
+  ctx.scene.add(group);
+  let timer = 0;
+  const actor: SteamActor = {
+    group,
+    burst(): void {
+      timer = 1.4;
+    },
+    update(dt: number, elapsed: number): void {
+      timer = Math.max(0, timer - dt);
+      const active = timer > 0;
+      puffs.forEach((sprite, index) => {
+        const phase = (elapsed * 0.8 + index * 0.21) % 1;
+        const strength = active ? 1 : 0.18;
+        sprite.position.y = 0.15 + phase * (active ? 1.7 : 0.5);
+        sprite.position.x = Math.sin(elapsed * 0.7 + index) * 0.12 * phase;
+        sprite.scale.setScalar((active ? 0.6 : 0.3) + phase * (active ? 1.2 : 0.35));
+        const materialRef = sprite.material as THREE.SpriteMaterial;
+        materialRef.opacity = strength * (1 - phase) * 0.55;
+      });
+    },
+  };
+  return actor;
+}
+
+export function createChain(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 4.4, spec.z);
+  const length = spec.length ?? 3.5;
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, length, 5), ctx.materials.materials.pipe);
+  rod.position.y = -length / 2;
+  group.add(rod);
+  const links = Math.floor(length / 0.22);
+  for (let i = 0; i < links; i += 1) {
+    const link = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.012, 4, 8), ctx.materials.materials.rust);
+    link.position.y = -0.1 - i * 0.22;
+    link.rotation.y = (i % 2) * Math.PI / 2;
+    link.rotation.x = Math.PI / 2;
+    group.add(link);
+  }
+  ctx.scene.add(group);
+  return group;
+}
+
+export function createBodyBag(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0.1, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const bagMaterial = new THREE.MeshStandardMaterial({ color: 0x2b302c, roughness: 0.72, metalness: 0.08 });
+  const bag = shadow(new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 1.35, 4, 8), bagMaterial));
+  bag.rotation.z = Math.PI / 2;
+  bag.scale.set(1, 1, 0.55);
+  bag.position.y = 0.22;
+  group.add(bag);
+  const zipper = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.02, 0.03), ctx.materials.materials.pipe);
+  zipper.position.set(0, 0.35, 0.14);
+  group.add(zipper);
+  for (const x of [-0.35, 0.35]) {
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.46), ctx.materials.materials.fabric);
+    strap.position.set(x, 0.3, 0);
+    group.add(strap);
+  }
+  ctx.scene.add(group);
+  ctx.physics.addStaticBox({
+    center: new THREE.Vector3(spec.x, 0.18, spec.z),
+    halfExtents: new THREE.Vector3(0.75, 0.16, 0.3),
+    rotationY: spec.rotationY ?? 0,
+  });
+  return group;
+}
+
+export function createPool(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0.03, spec.z);
+  const radius = (spec.size ?? 8) / 2;
+  const water = new THREE.Mesh(new THREE.CircleGeometry(radius, 40), ctx.materials.water);
+  water.rotation.x = -Math.PI / 2;
+  group.add(water);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.14, 8, 40), ctx.materials.materials.rust);
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.y = 0.06;
+  group.add(rim);
+  for (let i = 0; i < 3; i += 1) {
+    const ripple = new THREE.Mesh(
+      new THREE.RingGeometry(radius * (0.25 + i * 0.16), radius * (0.27 + i * 0.16), 40),
+      new THREE.MeshBasicMaterial({
+        color: 0x9ab8ad,
+        transparent: true,
+        opacity: 0.06,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    ripple.rotation.x = -Math.PI / 2;
+    ripple.position.y = 0.012 + i * 0.001;
+    group.add(ripple);
+  }
+  ctx.scene.add(group);
+  return group;
+}
+
+export function createWellValve(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 1.2, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), ctx.materials.materials.pipe);
+  stem.rotation.x = Math.PI / 2;
+  stem.position.z = 0.25;
+  group.add(stem);
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.06, 8, 22), ctx.materials.materials.rust);
+  wheel.position.z = 0.55;
+  group.add(wheel);
+  for (let i = 0; i < 4; i += 1) {
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.05), ctx.materials.materials.rust);
+    spoke.position.z = 0.55;
+    spoke.rotation.z = (i / 4) * Math.PI;
+    group.add(spoke);
+  }
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.2),
+    new THREE.MeshStandardMaterial({ color: 0x8e2f20, roughness: 0.6 }),
+  );
+  plate.position.set(0, 0.95, 0.1);
+  group.add(plate);
+  ctx.scene.add(group);
+  return group;
+}
+
+export function createCrawlerNest(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0.15, spec.z);
+  const rng = mulberry32(spec.id.length * 373 + Math.round(spec.z * 19));
+  const organic = new THREE.MeshStandardMaterial({ color: 0x4b4a3a, roughness: 0.95, metalness: 0.02 });
+  for (let i = 0; i < 7; i += 1) {
+    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.12 + rng() * 0.18, 7, 6), organic);
+    blob.position.set((rng() - 0.5) * 0.7, 0.08 + rng() * 0.18, (rng() - 0.5) * 0.7);
+    blob.scale.y = 0.6;
+    group.add(blob);
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const bone = new THREE.Mesh(new THREE.CapsuleGeometry(0.02, 0.3, 3, 5), ctx.materials.materials.bone);
+    bone.position.set((rng() - 0.5) * 0.8, 0.08, (rng() - 0.5) * 0.8);
+    bone.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+    group.add(bone);
+  }
+  ctx.scene.add(group);
+  return group;
+}
+
+export function createBoiler(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 0, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const scale = spec.size ?? 1.3;
+  const body = shadow(
+    new THREE.Mesh(new THREE.CylinderGeometry(0.75 * scale, 0.8 * scale, 1.9 * scale, 16), ctx.materials.materials.rust),
+  );
+  body.position.y = 0.95 * scale;
+  group.add(body);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.75 * scale, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), ctx.materials.materials.rust);
+  dome.position.y = 1.9 * scale;
+  group.add(dome);
+  const fireDoor = new THREE.Mesh(
+    new THREE.CircleGeometry(0.22 * scale, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x2a130a,
+      emissive: 0xff5a1a,
+      emissiveIntensity: 0.75,
+      roughness: 0.5,
+    }),
+  );
+  fireDoor.position.set(0, 0.55 * scale, 0.79 * scale);
+  group.add(fireDoor);
+  for (const x of [-0.5, 0.5]) {
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.2 * scale, 8), ctx.materials.materials.pipe);
+    pipe.position.set(x * scale, 1.7 * scale, 0);
+    pipe.rotation.z = 0.12;
+    group.add(pipe);
+  }
+  ctx.scene.add(group);
+  ctx.physics.addStaticBox({
+    center: new THREE.Vector3(spec.x, 0.9 * scale, spec.z),
+    halfExtents: new THREE.Vector3(0.85 * scale, 0.9 * scale, 0.85 * scale),
+    rotationY: spec.rotationY ?? 0,
+  });
+  return group;
+}
+
+export function createGauge(ctx: PropContext, spec: PropSpec): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(spec.x, spec.y ?? 1.4, spec.z);
+  group.rotation.y = spec.rotationY ?? 0;
+  const face = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 14), ctx.materials.materials.metalPanel);
+  face.rotation.x = Math.PI / 2;
+  group.add(face);
+  const dial = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ color: 0xc9c2a8 }));
+  dial.position.z = 0.032;
+  group.add(dial);
+  const needle = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.09, 0.005), new THREE.MeshBasicMaterial({ color: 0x7c1b12 }));
+  needle.position.set(0, 0.03, 0.04);
+  needle.rotation.z = -0.6;
+  group.add(needle);
+  ctx.scene.add(group);
+  return group;
+}

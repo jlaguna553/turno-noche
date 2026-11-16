@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findPath, nearestNode, pointAlong, type NavGraph } from '../../world/nav';
 import { LAYOUT, ZONE_BOXES, zoneAt } from '../../world/layout';
-import { NOTES, BREAKER_LINES, ENDINGS, INTRO, ZONE_LINES } from '../story';
+import { BESTIARY, CREW_TAGS, FUSES, NOTES, BREAKER_LINES, ENDINGS, INTRO, ZONE_LINES } from '../story';
 import { BREAKER_IDS } from '../objectives';
 
 describe('navegacion del nivel', () => {
@@ -67,6 +67,37 @@ describe('contenido narrativo y reparto de la planta', () => {
     for (const prop of LAYOUT.props) {
       expect(zoneAt(prop.x, prop.z), `${prop.id} fuera del nivel`).toBeTruthy();
     }
+  });
+
+  it('las fichas y los fusibles están en zonas nuevas y dentro del nivel', () => {
+    for (const tag of CREW_TAGS) {
+      expect(ZONE_BOXES.some((zone) => zone.id === tag.zone), tag.id).toBe(true);
+      expect(tag.lines.length).toBeGreaterThan(1);
+    }
+    for (const fuse of FUSES) {
+      expect(ZONE_BOXES.some((zone) => zone.id === fuse.zone), fuse.id).toBe(true);
+      const prop = LAYOUT.props.find((entry) => entry.kind === 'fuse' && entry.fuseId === fuse.id);
+      expect(prop, `falta ${fuse.id}`).toBeTruthy();
+    }
+    for (const tag of CREW_TAGS) {
+      const prop = LAYOUT.props.find((entry) => entry.kind === 'tag' && entry.tagId === tag.id);
+      expect(prop, `falta ${tag.id}`).toBeTruthy();
+    }
+  });
+
+  it('hay ruta a las tres alas nuevas y botellas suficientes', () => {
+    for (const target of ['a1', 'b1', 'q3']) {
+      const path = findPath(LAYOUT.nav, 'g0', target);
+      expect(path.nodes.length, target).toBeGreaterThan(2);
+    }
+    expect(LAYOUT.props.filter((prop) => prop.kind === 'bottle').length).toBeGreaterThanOrEqual(3);
+    expect(LAYOUT.props.filter((prop) => prop.kind === 'crawlerNest').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('el bestiario tiene tres entradas y los tres finales están escritos', () => {
+    expect(BESTIARY).toHaveLength(3);
+    expect(Object.keys(ENDINGS)).toEqual(expect.arrayContaining(['ascend', 'flood', 'stay']));
+    for (const entry of BESTIARY) expect(entry.body.length).toBeGreaterThan(1);
   });
 
   it('hay un breaker por id y lineas para cada uno', () => {

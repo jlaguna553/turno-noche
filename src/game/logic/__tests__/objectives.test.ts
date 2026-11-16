@@ -1,14 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addFuseRecord,
   addNoteRecord,
+  addTagRecord,
   checkpointFor,
   createRun,
+  fuseCount,
   isLiftUnlocked,
   objectiveFor,
   pullBreaker,
   pulledCount,
+  secretUnlocked,
+  sideObjectiveFor,
+  tagCount,
 } from '../objectives';
-import { NOTES, noteById } from '../story';
+import { CREW_TAGS, FUSES, NOTES, noteById } from '../story';
 
 describe('objetivos de la partida', () => {
   it('arranca pidiendo los tres breakers y sin corriente', () => {
@@ -52,6 +58,41 @@ describe('objetivos de la partida', () => {
     expect(addNoteRecord(run, note)).toBe(true);
     expect(addNoteRecord(run, note)).toBe(false);
     expect(run.notes).toEqual([note.id]);
+  });
+
+  it('fichas y fusibles se recogen sin duplicarse', () => {
+    const run = createRun();
+    const tag = CREW_TAGS[0];
+    const fuse = FUSES[0];
+    if (!tag || !fuse) throw new Error('sin coleccionables');
+    expect(addTagRecord(run, tag)).toBe(true);
+    expect(addTagRecord(run, tag)).toBe(false);
+    expect(addFuseRecord(run, fuse)).toBe(true);
+    expect(addFuseRecord(run, fuse)).toBe(false);
+    expect(tagCount(run)).toBe(1);
+    expect(fuseCount(run)).toBe(1);
+  });
+
+  it('el objetivo secundario avanza con los fusibles', () => {
+    const run = createRun();
+    expect(sideObjectiveFor(run).id).toBe('fuses');
+    expect(sideObjectiveFor(run).progress).toBe(0);
+    for (const fuse of FUSES) addFuseRecord(run, fuse);
+    expect(sideObjectiveFor(run).id).toBe('done');
+    expect(sideObjectiveFor(run).progress).toBe(3);
+  });
+
+  it('el final secreto exige las tres fichas y los tres fusibles', () => {
+    const run = createRun();
+    expect(secretUnlocked(run)).toBe(false);
+    for (const tag of CREW_TAGS) addTagRecord(run, tag);
+    expect(secretUnlocked(run)).toBe(false);
+    for (const fuse of FUSES) addFuseRecord(run, fuse);
+    expect(secretUnlocked(run)).toBe(true);
+  });
+
+  it('la partida arranca con tres botellas', () => {
+    expect(createRun().bottles).toBe(3);
   });
 
   it('el checkpoint está dentro de la garita', () => {

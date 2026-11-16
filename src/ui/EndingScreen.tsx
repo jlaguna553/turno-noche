@@ -19,7 +19,7 @@ export default function EndingScreen({ snapshot, ending, onMenu, onNewGame }: En
       <h1 className="ending-title">{def.title}</h1>
       <div className="ending-lines">
         {def.lines.map((line, index) => (
-          <p key={index} style={{ animationDelay: `${0.4 + index * 0.75}s` }}>
+          <p key={index} style={{ animationDelay: `${0.25 + index * 0.55}s` }}>
             {line}
           </p>
         ))}
@@ -30,6 +30,18 @@ export default function EndingScreen({ snapshot, ending, onMenu, onNewGame }: En
           <span>NOTAS</span>
           <b>
             {snapshot.notes.length}/{snapshot.notesTotal}
+          </b>
+        </div>
+        <div>
+          <span>FICHAS</span>
+          <b>
+            {snapshot.tags.length}/{snapshot.tagsTotal}
+          </b>
+        </div>
+        <div>
+          <span>FUSIBLES</span>
+          <b>
+            {snapshot.fuses.length}/{snapshot.fusesTotal}
           </b>
         </div>
         <div>

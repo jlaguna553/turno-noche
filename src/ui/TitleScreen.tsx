@@ -86,6 +86,15 @@ export default function TitleScreen({
                       NOTAS <span>{snapshot.notes.length}/{NOTES.length}</span>
                     </li>
                     <li>
+                      FICHAS <span>{snapshot.tags.length}/{snapshot.tagsTotal}</span>
+                    </li>
+                    <li>
+                      FUSIBLES <span>{snapshot.fuses.length}/{snapshot.fusesTotal}</span>
+                    </li>
+                    <li>
+                      BOTELLAS <span>{snapshot.bottles}</span>
+                    </li>
+                    <li>
                       MUERTES <span>{snapshot.deaths}</span>
                     </li>
                     <li>
@@ -96,10 +105,15 @@ export default function TitleScreen({
                     </li>
                   </ul>
                 ) : (
-                  <p className="lede">
-                    Once meses cerrada. Usted es el contratista del turno de noche. Rearme los tres
-                    breakers, encuentre el montacargas y no se quede quieto.
-                  </p>
+                  <>
+                    <p className="lede">
+                      Once meses cerrada. Usted es el contratista del turno de noche. Rearme los tres
+                      breakers, encuentre el montacargas y no se quede quieto.
+                    </p>
+                    <p className="tiny dim">
+                      10 notas · 3 placas de tripulación · 3 fusibles · 3 salidas · 2 tipos de criatura
+                    </p>
+                  </>
                 )}
                 <p className="tiny dim">
                   {error
@@ -127,6 +141,9 @@ export default function TitleScreen({
                 </li>
                 <li>
                   <kbd>F</kbd> <span>linterna</span>
+                </li>
+                <li>
+                  <kbd>Q</kbd> <span>lanzar botella (ruido)</span>
                 </li>
                 <li>
                   <kbd>TAB</kbd> <span>diario de notas</span>

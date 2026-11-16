@@ -68,6 +68,17 @@ describe('cerebro de la criatura', () => {
     expect(wiredSpeed).toBeGreaterThan(calmSpeed);
   });
 
+  it('un ruido lanzado fija un punto de investigación', () => {
+    const brain = new HunterBrain();
+    brain.hearNoise(-25, -7, 1);
+    expect(brain.state).toBe('investigate');
+    expect(brain.lure).toEqual({ x: -25, z: -7 });
+    const decision = brain.update(1 / 60, { ...base, angle: Math.PI, hasLOS: false, distance: 9 });
+    expect(decision.target).toBe('lure');
+    run(brain, 9, { angle: Math.PI, hasLOS: false, noise: 0, distance: 9 });
+    expect(brain.lure).toBeNull();
+  });
+
   it('alerta solo en la transición', () => {
     const brain = new HunterBrain();
     const first = brain.update(0.02, base);

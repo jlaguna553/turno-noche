@@ -24,7 +24,16 @@ export type SfxName =
   | 'locker'
   | 'lightOff'
   | 'gasp'
-  | 'error';
+  | 'error'
+  | 'crawler'
+  | 'glass'
+  | 'throw'
+  | 'fuse'
+  | 'tag'
+  | 'steam'
+  | 'typewriter'
+  | 'water'
+  | 'lunge';
 
 export interface AudioState {
   danger: number;
@@ -184,6 +193,15 @@ export class GameAudio {
     if (this.ambientGain) {
       this.ambientGain.gain.setTargetAtTime(0.045 + this.tension * 0.03, ctx.currentTime, 1.2);
     }
+  }
+
+  /** Capa de persecucion: sube el drone y acelera el pulso ambiental. */
+  setChase(on: boolean): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    this.ambientFilter?.frequency.setTargetAtTime(on ? 620 : 220, ctx.currentTime, 0.8);
+    this.droneGain?.gain.setTargetAtTime(on ? 0.09 : 0.045, ctx.currentTime, 0.8);
+    if (this.ambientGain) this.ambientGain.gain.setTargetAtTime(on ? 0.075 : 0.05, ctx.currentTime, 0.8);
   }
 
   /** Paneo y cercania de la criatura. pan -1 (izquierda) .. 1 (derecha). */
@@ -407,6 +425,47 @@ export class GameAudio {
         break;
       case 'error':
         this.tone(150, 0.18, 'sawtooth', 0.055, 96);
+        break;
+      case 'crawler': {
+        for (let i = 0; i < 4; i += 1) {
+          window.setTimeout(() => this.tone(1600 + i * 260, 0.045, 'square', 0.028, 1100 + i * 90), i * 55);
+        }
+        this.burst(0.35, 0.035, 3200, 2.4, 'highpass');
+        break;
+      }
+      case 'glass':
+        this.burst(0.12, 0.16, 4200, 1.4, 'highpass');
+        this.burst(0.3, 0.1, 2600, 2.2, 'highpass');
+        this.tone(1800, 0.08, 'square', 0.03, 900);
+        break;
+      case 'throw':
+        this.burst(0.2, 0.05, 1200, 0.7);
+        this.tone(420, 0.18, 'sine', 0.02, 180);
+        break;
+      case 'fuse':
+        this.burst(0.08, 0.12, 1800, 1.8);
+        this.tone(120, 0.35, 'sawtooth', 0.1, 60);
+        this.burst(0.4, 0.06, 3200, 1.5, 'highpass');
+        break;
+      case 'tag':
+        this.tone(1480, 0.12, 'triangle', 0.045);
+        this.tone(2210, 0.16, 'sine', 0.025);
+        break;
+      case 'steam':
+        this.burst(1.1, 0.12, 900, 0.5, 'highpass');
+        break;
+      case 'typewriter':
+        for (let i = 0; i < 6; i += 1) {
+          window.setTimeout(() => this.burst(0.03, 0.04, 1800, 2.2), i * 90);
+        }
+        break;
+      case 'water':
+        this.burst(0.7, 0.12, 700, 0.5);
+        this.tone(90, 0.5, 'sine', 0.07, 45);
+        break;
+      case 'lunge':
+        this.burst(0.35, 0.1, 420, 0.8);
+        this.tone(72, 0.5, 'sawtooth', 0.12, 38);
         break;
     }
   }

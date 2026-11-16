@@ -7,7 +7,9 @@ import {
   DEFAULT_SETTINGS,
   type BreakerId,
   type EndingId,
+  type CrewTag,
   type FocusInfo,
+  type FuseRecord,
   type NoteRecord,
   type Settings,
   type Snapshot,
@@ -32,27 +34,63 @@ import {
   type BatteryState,
 } from './logic/battery';
 import {
+  addFuseRecord,
   addNoteRecord,
+  addTagRecord,
   createRun,
+  fuseCount,
   isLiftUnlocked,
   objectiveFor,
   pulledCount,
   pullBreaker,
+  secretUnlocked,
+  sideObjectiveFor,
+  tagCount,
   type RunState,
 } from './logic/objectives';
 import {
   BREAKER_LINES,
+  CREW_TAGS,
   ENTITY_WHISPERS,
+  FUSE_COMPLETE_LINES,
+  FUSE_LINES,
+  FUSES,
   LIFT_LINES,
   NOTES,
-  noteById,
+  TAG_LINES,
   ZONE_LINES,
+  noteById,
 } from './logic/story';
 import { loadRun, saveRun } from './core/save';
-import type { LockerActor, NoteActor, BatteryActor } from './world/props';
+import type { BatteryActor, BottleActor, FuseActor, LockerActor, NoteActor, TagActor } from './world/props';
+import { CrawlerBrain } from './logic/crawler';
+import { createCrawler, type CrawlerActor } from './world/crawler';
+import { createViewmodel, type Viewmodel } from './world/viewmodel';
+import type { MonsterPose } from './world/monster';
 
 const FORWARD = new THREE.Vector3();
-const PATROL_NODES = ['p1', 'p2', 'p3', 'p4', 'p5', 'w1', 'w2', 'w3', 'w4', 'c-2', 'c2', 's1', 's2', 'v1', 'e1', 'e2'];
+const PATROL_NODES = [
+  'p1', 'p2', 'p3', 'p4', 'p5',
+  'w1', 'w2', 'w3', 'w4',
+  'c-2', 'c2', 's1', 's2', 'v1', 'e1', 'e2',
+  'a1', 'a2', 'b1', 'b2', 'q1', 'q3', 'q4', 'q5',
+];
+
+interface CrawlerEntity {
+  actor: CrawlerActor;
+  brain: CrawlerBrain;
+  path: NavNode[];
+  index: number;
+  repath: number;
+  nest: { x: number; z: number };
+}
+
+interface Projectile {
+  body: RAPIER.RigidBody;
+  mesh: THREE.Mesh;
+  life: number;
+  impact: boolean;
+}
 
 export class Engine {
   private renderer!: THREE.WebGLRenderer;
@@ -96,8 +134,24 @@ export class Engine {
   private monsterRepath = 0;
   private patrolNode: NavNode | null = null;
   private monsterState: HunterState = 'roam';
+  private monsterPose: MonsterPose = 'idle';
   private glimpseTimer = 0;
+  private glimpsePose: MonsterPose = 'idle';
+  private lungeTimer = 0;
+  private lungeCooldown = 0;
+  private emergeTimer = 0;
   private debugFreeze = false;
+  private lastChase = false;
+
+  private viewmodel: Viewmodel | null = null;
+  private latchView: CrawlerActor | null = null;
+  private crawlers: CrawlerEntity[] = [];
+  private latched: CrawlerEntity | null = null;
+  private latchTimer = 0;
+  private projectiles: Projectile[] = [];
+  private deathRoll = 0;
+  private deathTimer = 0;
+  private dropped: { mesh: THREE.Mesh; vy: number; vx: number; vz: number; spin: number } | null = null;
 
   private focus: FocusInfo | null = null;
   private focusKey = '';
@@ -134,6 +188,9 @@ export class Engine {
     if (loaded) {
       this.run.breakers = loaded.breakers;
       this.run.notes = loaded.notes;
+      this.run.tags = loaded.tags;
+      this.run.fuses = loaded.fuses;
+      this.run.bottles = loaded.bottles;
       this.run.deaths = loaded.deaths;
       this.run.elapsed = loaded.elapsed;
       this.run.ending = loaded.ending;
@@ -162,6 +219,29 @@ export class Engine {
     this.world = buildWorld(this.scene, this.physics, this.materials, LAYOUT);
     this.player = new PlayerController(this.physics, LAYOUT.spawn);
     this.createMonsterBody();
+    this.createCrawlers();
+    this.scene.add(this.camera);
+    this.viewmodel = createViewmodel(this.materials);
+    if (this.isTouch) this.viewmodel.group.scale.setScalar(0.48);
+    this.camera.add(this.viewmodel.group);
+    this.latchView = createCrawler(this.materials, 'latch-view');
+    this.latchView.group.position.set(0, -0.03, -0.62);
+    this.latchView.group.scale.setScalar(0.52);
+    this.latchView.group.visible = false;
+    this.latchView.group.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.renderOrder = 1000;
+      const source = mesh.material as THREE.MeshStandardMaterial;
+      const glowing = source.emissive && source.emissiveIntensity > 0.8;
+      const color = glowing
+        ? source.emissive.clone()
+        : source.color
+          ? source.color.clone().multiplyScalar(0.55)
+          : new THREE.Color(0x5d5548);
+      mesh.material = new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false });
+    });
+    this.camera.add(this.latchView.group);
 
     this.input = new Input(this.canvas);
     this.input.attach();
@@ -189,19 +269,34 @@ export class Engine {
       breakers: { ...this.run.breakers },
       notes: [...this.run.notes],
       notesTotal: NOTES.length,
+      tags: [...this.run.tags],
+      tagsTotal: CREW_TAGS.length,
+      fuses: [...this.run.fuses],
+      fusesTotal: FUSES.length,
+      bottles: this.run.bottles,
       objective: objectiveFor(this.run),
+      side: sideObjectiveFor(this.run),
       liftUnlocked: isLiftUnlocked(this.run),
+      secretUnlocked: secretUnlocked(this.run),
       ending: this.run.ending,
       elapsed: this.run.elapsed,
       deaths: this.run.deaths,
       hidden: this.hidden,
+      latched: Boolean(this.latched),
       battery: Math.round(this.battery.charge),
       flashlightOn: lightIsOn(this.battery),
     };
   }
 
   hasSave(): boolean {
-    return this.run.breakers.b1 || this.run.breakers.b2 || this.run.breakers.b3 || this.run.notes.length > 0;
+    return (
+      this.run.breakers.b1 ||
+      this.run.breakers.b2 ||
+      this.run.breakers.b3 ||
+      this.run.notes.length > 0 ||
+      this.run.tags.length > 0 ||
+      this.run.fuses.length > 0
+    );
   }
 
   startSession(): void {
@@ -227,6 +322,7 @@ export class Engine {
       this.input.reset();
     }
     this.applySavedRun();
+    this.resetAuxiliaryState();
     this.lockPointer();
     audio.unlock();
     audio.setVolume(this.settings.volume);
@@ -235,6 +331,7 @@ export class Engine {
 
     this.emitObjective();
     this.emitBattery(true);
+    bus.emit('bottles:change', { bottles: this.run.bottles });
     this.emitWaypoint();
     const startLine = this.hasSave()
       ? 'Sesión restaurada. El montacargas sigue donde lo dejó.'
@@ -278,7 +375,7 @@ export class Engine {
     this.input?.setVirtual(action, held);
   }
 
-  tapButton(action: 'use' | 'flashlight'): void {
+  tapButton(action: 'use' | 'flashlight' | 'throw'): void {
     this.input?.tapVirtual(action);
   }
 
@@ -287,6 +384,9 @@ export class Engine {
     return saveRun({
       breakers: { ...this.run.breakers },
       notes: [...this.run.notes],
+      tags: [...this.run.tags],
+      fuses: [...this.run.fuses],
+      bottles: this.run.bottles,
       elapsed: this.run.elapsed,
       deaths: this.run.deaths,
       ending: this.run.ending,
@@ -317,6 +417,13 @@ export class Engine {
     this.world?.setEmergency(isLiftUnlocked(this.run));
     this.world?.setLiftOpen(isLiftUnlocked(this.run));
     this.world?.monster.setVisible(true);
+    this.resetAuxiliaryState();
+    this.deathRoll = 0;
+    this.deathTimer = 0;
+    this.monsterPose = 'idle';
+    this.lungeTimer = 0;
+    this.emergeTimer = 0;
+    bus.emit('bottles:change', { bottles: this.run.bottles });
     if (this.input) {
       this.input.enabled = true;
       this.input.reset();
@@ -330,13 +437,14 @@ export class Engine {
 
   chooseEnding(ending: EndingId): void {
     if (!this.endingOpen) return;
+    if (ending === 'stay' && !secretUnlocked(this.run)) return;
     this.endingOpen = false;
     this.run.ending = ending;
     this.saveNow();
     this.sessionActive = false;
     if (this.input) this.input.enabled = false;
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
-    audio.play(ending === 'flood' ? 'slam' : 'door');
+    audio.play(ending === 'flood' ? 'slam' : ending === 'stay' ? 'metalGroan' : 'door');
     bus.emit('ending:show', { ending });
   }
 
@@ -378,6 +486,25 @@ export class Engine {
     this.patrolNode = LAYOUT.nav.nodes.find((node) => node.id === 'p2') ?? null;
   }
 
+  private createCrawlers(): void {
+    const world = this.world;
+    if (!world) return;
+    const nests = world.nests.length > 0 ? world.nests : [{ id: 'fallback', x: -22, z: 9 }];
+    for (const nest of nests.slice(0, 4)) {
+      const actor = createCrawler(this.materials as MaterialSet, `crawler-${nest.id}`);
+      actor.group.position.set(nest.x, 0, nest.z);
+      this.scene.add(actor.group);
+      this.crawlers.push({
+        actor,
+        brain: new CrawlerBrain(),
+        path: [],
+        index: 0,
+        repath: 0,
+        nest: { x: nest.x, z: nest.z },
+      });
+    }
+  }
+
   private wireEntities(): void {
     const world = this.world;
     if (!world) return;
@@ -387,6 +514,15 @@ export class Engine {
     }
     for (const actor of world.batteries) {
       actor.entity.onUse = () => this.pickBattery(actor);
+    }
+    for (const [tagId, actor] of world.tags) {
+      actor.entity.onUse = () => this.collectTag(tagId, actor);
+    }
+    for (const [fuseId, actor] of world.fuses) {
+      actor.entity.onUse = () => this.collectFuse(fuseId, actor);
+    }
+    for (const actor of world.bottles) {
+      actor.entity.onUse = () => this.pickBottle(actor);
     }
     for (const [id, actor] of world.breakers) {
       actor.entity.onUse = () => this.pullBreaker(id);
@@ -407,6 +543,13 @@ export class Engine {
     for (const id of this.run.notes) {
       world.notes.get(id)?.take();
     }
+    for (const id of this.run.tags) {
+      world.tags.get(id)?.take();
+    }
+    for (const id of this.run.fuses) {
+      world.fuses.get(id)?.take();
+    }
+    if (fuseCount(this.run) >= FUSES.length) world.restoreLighting();
     if (isLiftUnlocked(this.run)) world.setLiftOpen(true);
     world.setEmergency(isLiftUnlocked(this.run));
     this.brain.aggression = this.aggression();
@@ -490,13 +633,29 @@ export class Engine {
     this.updateFlashlight();
     this.updateFocus();
     this.updateDangerVisual(rawDt);
+    this.updateDroppedFlashlight(rawDt);
+
+    this.viewmodel?.update(rawDt, this.elapsed, {
+      on: lightIsOn(this.battery) && !this.hidden && !this.dead,
+      charge: this.battery.charge,
+      speed: this.player?.speed ?? 0,
+      sprinting: this.player?.sprinting ?? false,
+      crouched: this.player?.crouched ?? false,
+      hidden: this.hidden || !this.sessionActive,
+      dead: this.dead,
+    });
+
+    if (this.latchView) {
+      this.latchView.update(rawDt, this.elapsed, this.latched ? 'latch' : 'idle', 0.5);
+    }
 
     if (this.world && this.player) {
+      this.world.monster.setPose(this.monsterPose);
       this.world.monster.update(
         rawDt,
         this.elapsed,
         this.monsterState,
-        this.monsterState === 'roam' ? 0.8 : 2.6,
+        this.monsterPose === 'lunge' ? 3.6 : this.monsterState === 'hunt' ? 2.8 : 0.9,
         this.camera.position,
       );
     }
@@ -523,14 +682,30 @@ export class Engine {
     }
 
     this.updateMonster(dt, active);
+    this.updateCrawlers(dt, active);
+    this.updateProjectiles(dt);
     this.physics.step();
     player.postStep();
 
     if (active && !this.blocked) {
       if (input.consumePress('use')) this.tryInteract();
       if (input.consumePress('flashlight')) this.toggleFlashlight();
+      if (input.consumePress('throw')) this.throwBottle();
     } else {
       input.clearPresses();
+    }
+
+    if (this.latched) {
+      this.latchTimer -= dt;
+      this.shake = Math.max(this.shake, 0.45);
+      this.fear = Math.max(this.fear, 0.6);
+      if (this.latchTimer <= 0) this.shakeOffCrawler();
+    }
+
+    const chase = this.monsterState === 'hunt';
+    if (chase !== this.lastChase) {
+      this.lastChase = chase;
+      audio.setChase(chase);
     }
 
     if (active) {
@@ -549,7 +724,7 @@ export class Engine {
     }
 
     const distance = this.monsterDistance();
-    const danger = this.hidden ? 0.18 : this.dangerLevel(distance);
+    const danger = this.latched ? 0.82 : this.hidden ? 0.18 : this.dangerLevel(distance);
     this.fear += (danger - this.fear) * Math.min(1, dt * 2.2);
     if (active) {
       audio.update(dt, {
@@ -571,7 +746,11 @@ export class Engine {
 
   private applyCamera(alpha: number, dt: number): void {
     if (!this.player) return;
-    this.camera.fov += ((this.hidden ? 58 : RENDER.fov) - this.camera.fov) * Math.min(1, dt * 6);
+    const player = this.player;
+    const targetFov = this.hidden
+      ? 58
+      : RENDER.fov + (player.sprinting ? 4.2 : 0) - (player.crouched ? 2.4 : 0) - (this.latched ? 3 : 0);
+    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 6);
     this.camera.updateProjectionMatrix();
 
     if (this.hidden) {
@@ -587,6 +766,16 @@ export class Engine {
         this.camera.position.x += (Math.random() - 0.5) * this.shake * 0.14;
         this.camera.position.y += (Math.random() - 0.5) * this.shake * 0.12;
       }
+      if (this.deathTimer > 0) {
+        this.deathTimer = Math.max(0, this.deathTimer - dt);
+        this.deathRoll = Math.min(0.85, this.deathRoll + dt * 1.8);
+        this.camera.rotation.z += this.deathRoll;
+        this.camera.position.y -= (1 - this.deathTimer / 1.4) * 0.35;
+      }
+      if (this.latched) {
+        this.camera.rotation.z += Math.sin(this.elapsed * 27) * 0.035;
+        this.camera.position.x += (Math.random() - 0.5) * 0.03;
+      }
       return;
     }
     const t = this.elapsed * 0.11;
@@ -595,8 +784,51 @@ export class Engine {
   }
 
   private updateFlashlight(): void {
+    if (this.dead && this.dropped) {
+      const world = this.world;
+      if (world) {
+        const mesh = this.dropped.mesh;
+        world.flashlight.position.copy(mesh.position);
+        world.flashlight.target.position.set(mesh.position.x + 0.6, 0, mesh.position.z + 1.2);
+        world.flashlight.intensity = 8 + Math.random() * 14;
+        world.flashlight.visible = true;
+      }
+      return;
+    }
     const on = lightIsOn(this.battery) && !this.hidden;
     this.world?.setFlashlight(this.camera, on, lightStrength(this.battery, this.elapsed));
+  }
+
+  private dropFlashlight(): void {
+    const material = new THREE.MeshStandardMaterial({ color: 0x2b2f2d, roughness: 0.45, metalness: 0.7 });
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.32, 10), material);
+    mesh.position.copy(this.camera.position);
+    mesh.rotation.z = Math.PI / 2;
+    this.scene.add(mesh);
+    this.dropped = {
+      mesh,
+      vy: 1.2,
+      vx: (Math.random() - 0.5) * 1.4,
+      vz: (Math.random() - 0.5) * 1.4,
+      spin: 7,
+    };
+  }
+
+  private updateDroppedFlashlight(dt: number): void {
+    const dropped = this.dropped;
+    if (!dropped) return;
+    dropped.vy -= 9.8 * dt;
+    dropped.mesh.position.x += dropped.vx * dt;
+    dropped.mesh.position.y += dropped.vy * dt;
+    dropped.mesh.position.z += dropped.vz * dt;
+    dropped.mesh.rotation.x += dropped.spin * dt;
+    if (dropped.mesh.position.y < 0.05) {
+      dropped.mesh.position.y = 0.05;
+      dropped.vy = 0;
+      dropped.vx *= 0.82;
+      dropped.vz *= 0.82;
+      dropped.spin *= 0.9;
+    }
   }
 
   // ------------------------------------------------------------ criatura
@@ -626,17 +858,32 @@ export class Engine {
       return;
     }
 
+    if (this.emergeTimer > 0) {
+      this.emergeTimer -= dt;
+      this.monsterPose = 'emerge';
+      this.monsterState = 'hunt';
+      if (this.emergeTimer <= 0) {
+        this.monsterPose = 'run';
+        audio.play('growl');
+      }
+      return;
+    }
+
     if (this.glimpseTimer > 0) {
       this.glimpseTimer -= dt;
       this.monsterState = 'roam';
+      this.monsterPose = this.glimpsePose;
       if (this.glimpseTimer <= 0) {
+        this.monsterPose = 'idle';
         this.placeMonster(MONSTER_SETPIECES.start.x, MONSTER_SETPIECES.start.z, MONSTER_SETPIECES.start.yaw);
       }
       return;
     }
 
     if (!active) {
+      if (this.dead) return;
       this.monsterState = 'roam';
+      this.monsterPose = 'idle';
       return;
     }
 
@@ -671,6 +918,7 @@ export class Engine {
 
     if (decision.alerted) {
       audio.play('growl');
+      this.world?.monster.alert();
       this.world?.flicker(1.4);
       this.say(
         ENTITY_WHISPERS[Math.floor(Math.random() * ENTITY_WHISPERS.length)] ?? 'TE VEO',
@@ -683,11 +931,36 @@ export class Engine {
       this.emitDanger(0.18);
     }
 
+    this.lungeCooldown = Math.max(0, this.lungeCooldown - dt);
+    this.lungeTimer = Math.max(0, this.lungeTimer - dt);
+    if (
+      !this.hidden &&
+      decision.state === 'hunt' &&
+      senses.hasLOS &&
+      distance > 2.2 &&
+      distance < 6.2 &&
+      this.lungeCooldown <= 0 &&
+      this.lungeTimer <= 0
+    ) {
+      this.lungeTimer = 0.55;
+      this.lungeCooldown = 3.6;
+      this.monsterPose = 'lunge';
+      audio.play('lunge');
+      this.world?.monster.alert();
+      this.shake = Math.max(this.shake, 0.25);
+    } else if (this.lungeTimer > 0) {
+      this.monsterPose = 'lunge';
+    } else {
+      this.monsterPose = decision.state === 'hunt' ? 'run' : decision.state === 'investigate' ? 'walk' : speedPose(decision.speed);
+    }
+
     if (!this.hidden && distance < Math.min(MONSTER.catchDistance, 1.0)) {
+      this.monsterPose = 'attack';
       this.die('Te alcanzó en la oscuridad.');
       return;
     }
     if (!this.hidden && decision.state === 'hunt' && distance < MONSTER.catchDistance) {
+      this.monsterPose = 'attack';
       this.die('Te alcanzó en la oscuridad.');
       return;
     }
@@ -740,8 +1013,8 @@ export class Engine {
 
     const speed = this.hidden
       ? MONSTER.patrolSpeed
-      : decision.state === 'hunt'
-        ? decision.speed
+      : this.lungeTimer > 0
+        ? decision.speed * 1.7
         : decision.speed;
     const wantedYaw = Math.atan2(dirX, dirZ);
     this.monsterYaw = lerpAngle(this.monsterYaw, wantedYaw, Math.min(1, dt * 5.5));
@@ -764,6 +1037,10 @@ export class Engine {
     if (this.patrolNode && Math.hypot(position.x - this.patrolNode.x, position.z - this.patrolNode.z) < 0.9) {
       this.pickPatrol();
     }
+    if (decision.state === 'investigate' && this.brain.lure) {
+      const lure = this.brain.lure;
+      if (Math.hypot(position.x - lure.x, position.z - lure.z) < 1.4) this.brain.clearLure();
+    }
   }
 
   private computeMonsterPath(state: HunterState): void {
@@ -773,7 +1050,9 @@ export class Engine {
     const position = body.translation();
     const from = nearestNode(LAYOUT.nav, position.x, position.z);
     let goal: NavNode | null = null;
-    if (state === 'hunt' || state === 'investigate') {
+    if (state === 'investigate' && this.brain.lure) {
+      goal = nearestNode(LAYOUT.nav, this.brain.lure.x, this.brain.lure.z);
+    } else if (state === 'hunt' || state === 'investigate') {
       goal = nearestNode(LAYOUT.nav, player.eye.x, player.eye.z);
     } else {
       if (!this.patrolNode) this.pickPatrol();
@@ -837,7 +1116,7 @@ export class Engine {
   // -------------------------------------------------------- interaccion
 
   private updateFocus(): void {
-    if (!this.sessionActive || this.blocked || this.dead || this.endingOpen || this.hidden) {
+    if (!this.sessionActive || this.blocked || this.dead || this.endingOpen || this.hidden || this.latched) {
       this.setFocus(null);
       return;
     }
@@ -871,10 +1150,15 @@ export class Engine {
   }
 
   private tryInteract(): void {
+    if (this.latched) {
+      this.shakeOffCrawler();
+      return;
+    }
     if (this.hidden) {
       this.exitHide();
       return;
     }
+    this.viewmodel?.triggerInteract();
     const focus = this.focus;
     if (!focus) return;
     const entity = this.world?.entities.byEntityId(focus.id);
@@ -906,6 +1190,301 @@ export class Engine {
     audio.play('pickup');
     bus.emit('toast', { kind: 'info', title: 'PILA RECOGIDA', body: `Carga: ${Math.round(this.battery.charge)} %` });
     this.emitBattery(true);
+  }
+
+  private collectTag(tagId: string, actor: TagActor): void {
+    const tag: CrewTag | undefined = CREW_TAGS.find((entry) => entry.id === tagId);
+    if (!tag) return;
+    if (!addTagRecord(this.run, tag)) return;
+    actor.take();
+    audio.play('tag');
+    bus.emit('tag:found', { tag, total: tagCount(this.run), max: CREW_TAGS.length });
+    bus.emit('toast', {
+      kind: 'crew',
+      title: `PLACA · ${tag.name}`,
+      body: `${tag.role} · ${tagCount(this.run)}/${CREW_TAGS.length}`,
+    });
+    this.saySequence(TAG_LINES[tag.id] ?? ['La placa está fría.'], 'VERA', 'vera');
+    this.emitObjective();
+    this.saveNow();
+    if (secretUnlocked(this.run)) this.announceSecret();
+  }
+
+  private collectFuse(fuseId: string, actor: FuseActor): void {
+    const fuse: FuseRecord | undefined = FUSES.find((entry) => entry.id === fuseId);
+    if (!fuse) return;
+    if (!addFuseRecord(this.run, fuse)) return;
+    actor.take();
+    audio.play('fuse');
+    this.world?.flicker(1.4);
+    bus.emit('fuse:found', { fuse, total: fuseCount(this.run), max: FUSES.length });
+    bus.emit('toast', {
+      kind: 'fuse',
+      title: fuse.label,
+      body: `${fuseCount(this.run)}/${FUSES.length} · alumbrado de emergencia`,
+    });
+    if (fuseCount(this.run) >= FUSES.length) {
+      this.world?.restoreLighting();
+      this.saySequence(FUSE_COMPLETE_LINES, 'VERA', 'vera');
+      this.brain.hearNoise(this.player?.eye.x ?? 0, this.player?.eye.z ?? 0, 0.5);
+      bus.emit('toast', {
+        kind: 'info',
+        title: 'ALUMBRADO RESTABLECIDO',
+        body: 'La planta ya no está a oscuras. Eso no es necesariamente bueno.',
+      });
+      if (secretUnlocked(this.run)) this.announceSecret();
+    } else {
+      this.saySequence(FUSE_LINES[fuse.id] ?? ['Fusible restaurado.'], 'VERA', 'vera');
+    }
+    this.emitObjective();
+    this.saveNow();
+  }
+
+  private pickBottle(actor: BottleActor): void {
+    if (this.run.bottles >= 9) return;
+    this.run.bottles += 1;
+    actor.take();
+    audio.play('tag');
+    bus.emit('bottles:change', { bottles: this.run.bottles });
+    bus.emit('toast', { kind: 'info', title: 'BOTELLA', body: `${this.run.bottles} en el cinturón` });
+    this.emitObjective();
+    this.saveNow();
+  }
+
+  private announceSecret(): void {
+    this.later(() => {
+      bus.emit('toast', {
+        kind: 'warning',
+        title: 'TERCERA SALIDA DISPONIBLE',
+        body: 'Todas las placas y todos los fusibles. El montacargas ofrece otra opción.',
+      });
+      this.say(
+        'Ha reunido a todo el turno y ha devuelto la luz. El montacargas tiene una tercera posición.',
+        'VERA',
+        'vera',
+      );
+    }, 1400);
+  }
+
+  private throwBottle(): void {
+    if (this.latched || this.hidden || this.dead) return;
+    if (this.run.bottles <= 0) {
+      audio.play('click');
+      this.say('No quedan botellas.', 'TÚ', 'self');
+      return;
+    }
+    const player = this.player;
+    if (!player) return;
+    this.run.bottles -= 1;
+    bus.emit('bottles:change', { bottles: this.run.bottles });
+    this.viewmodel?.triggerThrow();
+    audio.play('throw');
+    const forward = this.camera.getWorldDirection(new THREE.Vector3());
+    const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    const origin = this.camera.position
+      .clone()
+      .addScaledVector(forward, 0.55)
+      .addScaledVector(right, 0.12);
+    origin.y -= 0.08;
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.055, 0.07, 0.24, 8),
+      new THREE.MeshStandardMaterial({
+        color: 0x2f4a35,
+        roughness: 0.18,
+        metalness: 0.05,
+        transparent: true,
+        opacity: 0.92,
+      }),
+    );
+    mesh.position.copy(origin);
+    this.scene.add(mesh);
+    const { body } = this.physics.addCylinderBody(origin, 0.06, 0.12, 1.1);
+    body.setLinvel({ x: forward.x * 10 + right.x * 1.2, y: forward.y * 10 + 2.2, z: forward.z * 10 + right.z * 1.2 }, true);
+    this.projectiles.push({ body, mesh, life: 0, impact: false });
+    this.emitObjective();
+  }
+
+  private updateProjectiles(dt: number): void {
+    if (!this.world) return;
+    for (const projectile of this.projectiles) {
+      projectile.life += dt;
+      const translation = projectile.body.translation();
+      const rotation = projectile.body.rotation();
+      projectile.mesh.position.set(translation.x, translation.y, translation.z);
+      projectile.mesh.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+      if (projectile.impact) continue;
+      if (projectile.life > 0.22 && (translation.y < 0.16 || projectile.life > 2.4)) {
+        projectile.impact = true;
+        audio.play('glass');
+        this.brain.hearNoise(translation.x, translation.z, 1);
+        this.world.flicker(0.35);
+        bus.emit('toast', {
+          kind: 'info',
+          title: 'CRISTAL ROTO',
+          body: 'El ruido se aleja de usted. Él también.',
+        });
+        for (const crawler of this.crawlers) {
+          const distance = Math.hypot(
+            crawler.actor.group.position.x - translation.x,
+            crawler.actor.group.position.z - translation.z,
+          );
+          if (distance < 8 && !this.latched) crawler.brain.startle();
+        }
+      }
+    }
+    const finished = this.projectiles.filter((projectile) => projectile.impact && projectile.life > 1.6);
+    for (const projectile of finished) {
+      this.physics.w.removeRigidBody(projectile.body);
+      this.scene.remove(projectile.mesh);
+      projectile.mesh.geometry.dispose();
+      const material = projectile.mesh.material as THREE.Material;
+      material.dispose();
+    }
+    this.projectiles = this.projectiles.filter((projectile) => !(projectile.impact && projectile.life > 1.6));
+  }
+
+  private latchCrawler(crawler: CrawlerEntity): void {
+    if (this.latched || this.dead) return;
+    this.latched = crawler;
+    this.latchTimer = 5.2;
+    crawler.actor.setVisible(false);
+    this.latchView?.setVisible(true);
+    audio.play('crawler');
+    this.shake = 0.8;
+    this.flash = Math.max(this.flash, 0.22);
+    this.brain.hearNoise(this.player?.eye.x ?? 0, this.player?.eye.z ?? 0, 1);
+    bus.emit('latch:change', { latched: true });
+    this.say('Se te ha pegado a la cara. Pulsa E. No corras.', 'TÚ', 'self');
+  }
+
+  private shakeOffCrawler(): void {
+    const crawler = this.latched;
+    if (!crawler) return;
+    crawler.actor.setVisible(true);
+    this.latchView?.setVisible(false);
+    const player = this.player;
+    const forwardX = player ? -Math.sin(player.yaw) : 0;
+    const forwardZ = player ? -Math.cos(player.yaw) : 1;
+    crawler.actor.group.position.set(
+      (player?.eye.x ?? 0) + forwardX * 1.1,
+      0,
+      (player?.eye.z ?? 0) + forwardZ * 1.1,
+    );
+    crawler.brain.shakeOff();
+    crawler.path = [];
+    crawler.repath = 0;
+    this.latched = null;
+    this.latchTimer = 0;
+    this.shake = Math.max(this.shake, 0.3);
+    audio.play('crawler');
+    bus.emit('latch:change', { latched: false });
+  }
+
+  private resetAuxiliaryState(): void {
+    this.latchView?.setVisible(false);
+    this.lastChase = false;
+    audio.setChase(false);
+    this.latched = null;
+    this.latchTimer = 0;
+    bus.emit('latch:change', { latched: false });
+    for (const projectile of this.projectiles) {
+      this.physics.w.removeRigidBody(projectile.body);
+      this.scene.remove(projectile.mesh);
+      projectile.mesh.geometry.dispose();
+      (projectile.mesh.material as THREE.Material).dispose();
+    }
+    this.projectiles = [];
+    if (this.dropped) {
+      this.scene.remove(this.dropped.mesh);
+      this.dropped.mesh.geometry.dispose();
+      (this.dropped.mesh.material as THREE.Material).dispose();
+      this.dropped = null;
+    }
+    for (const crawler of this.crawlers) {
+      crawler.actor.setVisible(true);
+      crawler.actor.group.position.set(crawler.nest.x, 0, crawler.nest.z);
+      crawler.brain.reset();
+      crawler.path = [];
+      crawler.index = 0;
+      crawler.repath = 0;
+    }
+  }
+
+  private updateCrawlers(dt: number, active: boolean): void {
+    if (!active || !this.player) return;
+    const player = this.player;
+    for (const crawler of this.crawlers) {
+      if (this.latched === crawler) continue;
+      const position = crawler.actor.group.position;
+      const dx = player.eye.x - position.x;
+      const dz = player.eye.z - position.z;
+      const distance = Math.hypot(dx, dz);
+      const origin = new THREE.Vector3(position.x, 0.3, position.z);
+      const target = new THREE.Vector3(player.eye.x, player.eye.y - 0.4, player.eye.z);
+      const direction = target.clone().sub(origin);
+      const length = direction.length();
+      const hit = this.physics.castRay(origin, direction.normalize(), length, this.player.collider);
+      const hasLOS = !hit || hit.distance >= length - 0.4;
+      const forward = this.camera.getWorldDirection(FORWARD);
+      const toCrawler = new THREE.Vector3(dx, 0, dz).normalize();
+      const aimed = forward.dot(toCrawler) > 0.55;
+      const lightOn = lightIsOn(this.battery) && !this.hidden && distance < 7 && aimed;
+
+      const decision = crawler.brain.update(dt, { distance, hasLOS, hidden: this.hidden, lightOn });
+      if (decision.screech) {
+        audio.play('crawler');
+        this.brain.hearNoise(position.x, position.z, 0.5);
+        this.shake = Math.max(this.shake, 0.16);
+      }
+      if (decision.latch) {
+        this.latchCrawler(crawler);
+        continue;
+      }
+
+      let goalX = position.x;
+      let goalZ = position.z;
+      if (decision.state === 'flee') {
+        goalX = position.x - dx * 0.8;
+        goalZ = position.z - dz * 0.8;
+      } else if (decision.state === 'chase') {
+        if (hasLOS || distance < 3.5) {
+          goalX = player.eye.x;
+          goalZ = player.eye.z;
+        } else {
+          crawler.repath -= dt;
+          if (crawler.repath <= 0) {
+            crawler.repath = 0.65;
+            const from = nearestNode(LAYOUT.nav, position.x, position.z);
+            const to = nearestNode(LAYOUT.nav, player.eye.x, player.eye.z);
+            crawler.path = findPath(LAYOUT.nav, from.id, to.id).nodes;
+            crawler.index = 0;
+          }
+          const node = crawler.path[crawler.index];
+          if (node) {
+            goalX = node.x;
+            goalZ = node.z;
+            if (Math.hypot(node.x - position.x, node.z - position.z) < 0.5) crawler.index += 1;
+          }
+        }
+      } else {
+        goalX = crawler.nest.x + Math.sin(this.elapsed * 0.35 + crawler.nest.x) * 0.8;
+        goalZ = crawler.nest.z + Math.cos(this.elapsed * 0.31 + crawler.nest.z) * 0.8;
+      }
+
+      let dirX = goalX - position.x;
+      let dirZ = goalZ - position.z;
+      const dirLength = Math.hypot(dirX, dirZ);
+      if (dirLength > 0.001) {
+        dirX /= dirLength;
+        dirZ /= dirLength;
+      }
+      const speed = decision.speed;
+      position.x += dirX * speed * dt;
+      position.z += dirZ * speed * dt;
+      position.y = 0;
+      crawler.actor.group.rotation.y = Math.atan2(dirX, dirZ);
+      crawler.actor.update(dt, this.elapsed, decision.state, speed);
+    }
   }
 
   private toggleFlashlight(): void {
@@ -1019,6 +1598,11 @@ export class Engine {
     bus.emit('ending:ready', {
       notes: this.run.notes.length,
       notesTotal: NOTES.length,
+      tags: tagCount(this.run),
+      tagsTotal: CREW_TAGS.length,
+      fuses: fuseCount(this.run),
+      fusesTotal: FUSES.length,
+      secret: secretUnlocked(this.run),
       elapsed: this.run.elapsed,
       deaths: this.run.deaths,
     });
@@ -1034,7 +1618,9 @@ export class Engine {
           ? 'B1 en línea. Vaya al taller. No corra por el pasillo: los conductos amplifican todo.'
           : pulled === 2
             ? 'Falta B3. Está en la subestación, detrás de los transformadores.'
-            : 'Los tres breakers están rearmados. Vuelva al montacargas de la garita.';
+            : secretUnlocked(this.run)
+              ? 'Los tres breakers están rearmados. Ha reunido a todo el turno y ha devuelto la luz. El montacargas admite una tercera posición.'
+              : 'Los tres breakers están rearmados. Vuelva al montacargas de la garita. Si quiere la tercera salida, busque las tres placas y los tres fusibles.';
     this.saySequence([line], 'VERA', 'vera');
   }
 
@@ -1092,6 +1678,44 @@ export class Engine {
     } else if (zoneId === 'pasillo-sur') {
       audio.play('whisper');
       this.flash = 0.18;
+    } else if (zoneId === 'archivo') {
+      const chair = this.world?.chairs.get('chair-archivo');
+      if (chair) chair.rotation.y += Math.PI;
+      audio.play('typewriter');
+      this.world?.flicker(1.2);
+      this.glimpsePose = 'peek';
+      this.placeMonster(
+        MONSTER_SETPIECES.archivePeek.x,
+        MONSTER_SETPIECES.archivePeek.z,
+        MONSTER_SETPIECES.archivePeek.yaw,
+      );
+      this.glimpseTimer = 1.5;
+      this.later(() => this.say('La silla del archivo acaba de girarse.', 'TÚ', 'self'), 700);
+    } else if (zoneId === 'calderas') {
+      this.world?.steam.get('steam-vent-1')?.burst();
+      this.world?.steam.get('steam-vent-2')?.burst();
+      audio.play('steam');
+      this.world?.flicker(1.8);
+      this.shake = 0.35;
+      for (const crawler of this.crawlers) {
+        if (Math.hypot(crawler.nest.x + 36, crawler.nest.z + 2) < 8) crawler.brain.startle();
+      }
+      this.later(() => audio.play('crawler'), 900);
+    } else if (zoneId === 'cisterna') {
+      audio.play('water');
+      this.world?.flicker(1.5);
+      this.placeMonster(
+        MONSTER_SETPIECES.cisternEmerge.x,
+        MONSTER_SETPIECES.cisternEmerge.z,
+        MONSTER_SETPIECES.cisternEmerge.yaw,
+      );
+      this.emergeTimer = 2.6;
+      this.monsterPose = 'emerge';
+      this.brain.reset('hunt', 0.8);
+      this.world?.monster.setVisible(true);
+      this.shake = 0.6;
+      for (const crawler of this.crawlers) crawler.brain.startle();
+      this.later(() => this.say('El agua se ha movido. No había nada en el agua.', 'TÚ', 'self'), 900);
     }
   }
 
@@ -1188,8 +1812,14 @@ export class Engine {
     } else if (roll < 0.78) {
       audio.play('slam');
       this.world?.flicker(0.5);
-    } else if (roll < 0.9) {
+    } else if (roll < 0.82) {
       audio.play('locker');
+    } else if (roll < 0.9) {
+      audio.play('crawler');
+      this.world?.flicker(0.4);
+    } else if (roll < 0.96) {
+      this.world?.steam.get('steam-vent-1')?.burst();
+      audio.play('steam');
     } else {
       audio.play('gasp');
       this.say(ENTITY_WHISPERS[Math.floor(Math.random() * ENTITY_WHISPERS.length)] ?? 'QUÉDATE', 'EL HUÉSPED', 'entity');
@@ -1202,8 +1832,12 @@ export class Engine {
     this.run.deaths += 1;
     this.flash = 1;
     this.shake = 1;
+    this.deathTimer = 1.4;
+    this.deathRoll = 0;
+    this.monsterPose = 'attack';
     audio.play('death');
     audio.play('scream');
+    audio.play('lunge');
     const player = this.player;
     if (player) {
       const forwardX = -Math.sin(player.yaw);
@@ -1211,15 +1845,16 @@ export class Engine {
       this.placeMonster(player.eye.x + forwardX * 1.6, player.eye.z + forwardZ * 1.6, player.yaw);
       player.pitch = 0.16;
       this.world?.monster.setVisible(true);
+      this.dropFlashlight();
     }
     this.player?.setBlocked(true);
     if (this.input) this.input.enabled = false;
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     bus.emit('hide:change', { hidden: false });
     this.hidden = false;
-    // 480 ms de criatura en primer plano antes del cartel: el susto necesita
-    // verse, no solo oirse.
-    this.later(() => bus.emit('death', { cause, deaths: this.run.deaths }), 480);
+    this.shakeOffCrawler();
+    // 950 ms de criatura y linterna cayendo antes del cartel.
+    this.later(() => bus.emit('death', { cause, deaths: this.run.deaths }), 950);
     this.saveNow();
   }
 
@@ -1294,20 +1929,56 @@ export class Engine {
         const locker = this.world?.lockers.get('locker-v3');
         if (locker) this.toggleHide(locker);
       },
+      throw: () => this.throwBottle(),
+      latch: () => {
+        const crawler = this.crawlers[0];
+        if (crawler) this.latchCrawler(crawler);
+      },
+      shake: () => this.shakeOffCrawler(),
+      bottles: (count: number) => {
+        this.run.bottles = Math.max(0, count);
+        bus.emit('bottles:change', { bottles: this.run.bottles });
+        this.emitObjective();
+      },
+      collectAll: () => {
+        for (const [id, actor] of this.world?.tags ?? []) this.collectTag(id, actor);
+        for (const [id, actor] of this.world?.fuses ?? []) this.collectFuse(id, actor);
+      },
+      pose: (next: MonsterPose) => {
+        this.monsterPose = next;
+        this.world?.monster.setPose(next);
+      },
+      monsterAt: (x: number, z: number, yaw: number) => {
+        this.placeMonster(x, z, yaw);
+        this.world?.monster.setVisible(true);
+      },
       state: () => ({
         snapshot: this.getSnapshot(),
         monster: this.monsterState,
+        pose: this.monsterPose,
         distance: Math.round(this.monsterDistance()),
         hidden: this.hidden,
+        latched: Boolean(this.latched),
         dead: this.dead,
         zone: this.currentZoneId,
         focus: this.focus,
         fps: this.fpsFrames,
+        projectiles: this.projectiles.length,
+        crawlers: this.crawlers.map((crawler) => ({
+          x: +crawler.actor.group.position.x.toFixed(1),
+          z: +crawler.actor.group.position.z.toFixed(1),
+          state: crawler.brain.state,
+        })),
+        lure: this.brain.lure,
       }),
     };
     (window as unknown as { __turnoNoche?: typeof bridge }).__turnoNoche = bridge;
   }
 
+}
+
+function speedPose(speed: number): MonsterPose {
+  return speed > 2.2 ? 'run' : speed > 0.2 ? 'walk' : 'idle';
 }
 
 function clampAngle(value: number, base: number, limit: number): number {

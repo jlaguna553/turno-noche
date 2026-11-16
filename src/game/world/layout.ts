@@ -62,7 +62,22 @@ export type PropKind =
   | 'cables'
   | 'drain'
   | 'mirror'
-  | 'bulkhead';
+  | 'bulkhead'
+  | 'filingCabinet'
+  | 'safe'
+  | 'mapBoard'
+  | 'typewriter'
+  | 'boiler'
+  | 'gauge'
+  | 'steamVent'
+  | 'chain'
+  | 'bodyBag'
+  | 'tag'
+  | 'fuse'
+  | 'bottle'
+  | 'pool'
+  | 'wellValve'
+  | 'crawlerNest';
 
 export interface PropSpec {
   id: string;
@@ -76,6 +91,8 @@ export interface PropSpec {
   axis?: 'x' | 'z';
   noteId?: string;
   breakerId?: string;
+  tagId?: string;
+  fuseId?: string;
   label?: string;
   color?: number;
   intensity?: number;
@@ -175,6 +192,39 @@ export const LAYOUT: Layout = {
       wallMaterial: 'metalPanel',
       floorMaterial: 'concreteFloor',
     },
+    {
+      id: 'archivo',
+      name: 'ARCHIVO',
+      banner: 'ARCHIVO · TURNO 07/11',
+      min: [15, -18],
+      max: [27, -11],
+      floorY: FLOOR_Y,
+      ceilingY: 3.4,
+      wallMaterial: 'tileWall',
+      floorMaterial: 'wood',
+    },
+    {
+      id: 'calderas',
+      name: 'SALA DE CALDERAS',
+      banner: 'CALDERAS',
+      min: [-42, -9],
+      max: [-30, 3],
+      floorY: FLOOR_Y,
+      ceilingY: 5.0,
+      wallMaterial: 'metalPanel',
+      floorMaterial: 'concreteFloor',
+    },
+    {
+      id: 'cisterna',
+      name: 'CISTERNA · POZO 1',
+      banner: 'CISTERNA · POZO 1',
+      min: [-30, 3],
+      max: [-15, 15],
+      floorY: FLOOR_Y,
+      ceilingY: 4.6,
+      wallMaterial: 'concreteWall',
+      floorMaterial: 'grate',
+    },
   ],
   walls: [
     // GARITA
@@ -210,8 +260,8 @@ export const LAYOUT: Layout = {
 
     // SALA DE BOMBAS
     { id: 'sb-n', axis: 'x', from: -30, to: -15, at: -11, height: 6.2, thickness: 0.4, material: 'concreteWall' },
-    { id: 'sb-s', axis: 'x', from: -30, to: -15, at: 3, height: 6.2, thickness: 0.4, material: 'concreteWall' },
-    { id: 'sb-w', axis: 'z', from: -11, to: 3, at: -30, height: 6.2, thickness: 0.4, material: 'concreteWall' },
+    { id: 'sb-s', axis: 'x', from: -30, to: -15, at: 3, height: 6.2, thickness: 0.4, material: 'concreteWall', openings: [{ center: -22, width: 2.2, bottom: 0, top: 2.4 }] },
+    { id: 'sb-w', axis: 'z', from: -11, to: 3, at: -30, height: 6.2, thickness: 0.4, material: 'concreteWall', openings: [{ center: -3, width: 2.2, bottom: 0, top: 2.4 }] },
     { id: 'sb-e-n', axis: 'z', from: -11, to: -5, at: -15, height: 6.2, thickness: 0.4, material: 'concreteWall' },
     { id: 'sb-e-s', axis: 'z', from: -1.8, to: 3, at: -15, height: 6.2, thickness: 0.4, material: 'concreteWall' },
     {
@@ -227,7 +277,7 @@ export const LAYOUT: Layout = {
     },
 
     // TALLER
-    { id: 't-n', axis: 'x', from: 15, to: 30, at: -11, height: 4.1, thickness: 0.4, material: 'concreteWall' },
+    { id: 't-n', axis: 'x', from: 15, to: 30, at: -11, height: 4.1, thickness: 0.4, material: 'concreteWall', openings: [{ center: 21, width: 2.2, bottom: 0, top: 2.4 }] },
     { id: 't-s', axis: 'x', from: 15, to: 30, at: 3, height: 4.1, thickness: 0.4, material: 'concreteWall' },
     { id: 't-e', axis: 'z', from: -11, to: 3, at: 30, height: 4.1, thickness: 0.4, material: 'concreteWall' },
     { id: 't-w-n', axis: 'z', from: -11, to: -5, at: 15, height: 4.1, thickness: 0.4, material: 'concreteWall' },
@@ -289,6 +339,20 @@ export const LAYOUT: Layout = {
     { id: 'se-s', axis: 'x', from: -8, to: 8, at: 22, height: 5.2, thickness: 0.36, material: 'metalPanel' },
     { id: 'se-w', axis: 'z', from: 14, to: 22, at: -8, height: 5.2, thickness: 0.36, material: 'metalPanel' },
     { id: 'se-e', axis: 'z', from: 14, to: 22, at: 8, height: 5.2, thickness: 0.36, material: 'metalPanel' },
+    // ARCHIVO
+    { id: 'a-n', axis: 'x', from: 15, to: 27, at: -18, height: 3.4, thickness: 0.3, material: 'tileWall' },
+    { id: 'a-w', axis: 'z', from: -18, to: -11, at: 15, height: 3.4, thickness: 0.3, material: 'tileWall' },
+    { id: 'a-e', axis: 'z', from: -18, to: -11, at: 27, height: 3.4, thickness: 0.3, material: 'tileWall' },
+
+    // CALDERAS
+    { id: 'b-n', axis: 'x', from: -42, to: -30, at: -9, height: 5.0, thickness: 0.36, material: 'metalPanel' },
+    { id: 'b-s', axis: 'x', from: -42, to: -30, at: 3, height: 5.0, thickness: 0.36, material: 'metalPanel' },
+    { id: 'b-w', axis: 'z', from: -9, to: 3, at: -42, height: 5.0, thickness: 0.36, material: 'metalPanel' },
+
+    // CISTERNA
+    { id: 'c-w', axis: 'z', from: 3, to: 15, at: -30, height: 4.6, thickness: 0.36, material: 'concreteWall' },
+    { id: 'c-e', axis: 'z', from: 3, to: 15, at: -15, height: 4.6, thickness: 0.36, material: 'concreteWall' },
+    { id: 'c-s', axis: 'x', from: -30, to: -15, at: 15, height: 4.6, thickness: 0.36, material: 'concreteWall' },
   ],
   props: [
     // ---- GARITA ----
@@ -429,6 +493,90 @@ export const LAYOUT: Layout = {
     { id: 'pipe-se', kind: 'pipe', x: -7.6, y: 4.0, z: 18.0, axis: 'z', length: 7.4 },
     { id: 'extinguisher-se', kind: 'extinguisher', x: 7.6, y: 0, z: 14.8, rotationY: -Math.PI / 2 },
     { id: 'drain-se', kind: 'drain', x: 0, y: 0.01, z: 18.6, size: 1.5 },
+    // ---- ARCHIVO ----
+    { id: 'light-arch-1', kind: 'light', x: 18.2, y: 3.2, z: -14.4, intensity: 12, color: 0xc8d8c4, flicker: 0.35 },
+    { id: 'light-arch-2', kind: 'light', x: 24.2, y: 3.2, z: -16.2, intensity: 6, color: 0xffb877, flicker: 0.2 },
+    { id: 'light-arch-3', kind: 'light', x: 21.0, y: 3.2, z: -12.2, intensity: 0, color: 0xaab4a6, broken: true },
+    { id: 'desk-arch-1', kind: 'desk', x: 18.4, y: 0, z: -13.4, rotationY: 0.05 },
+    { id: 'desk-arch-2', kind: 'desk', x: 23.9, y: 0, z: -13.4, rotationY: -0.06 },
+    { id: 'chair-arch-1', kind: 'chair', x: 18.4, y: 0, z: -12.4, rotationY: Math.PI },
+    { id: 'chair-arch-2', kind: 'chair', x: 23.9, y: 0, z: -12.4, rotationY: Math.PI },
+    { id: 'chair-archivo', kind: 'chair', x: 21.4, y: 0, z: -16.8, rotationY: 0.4 },
+    { id: 'typewriter-arch', kind: 'typewriter', x: 18.9, y: 0.82, z: -13.4, rotationY: 0.05 },
+    { id: 'cab-1', kind: 'filingCabinet', x: 16.6, y: 0, z: -17.5, rotationY: 0 },
+    { id: 'cab-2', kind: 'filingCabinet', x: 19.2, y: 0, z: -17.5, rotationY: 0 },
+    { id: 'cab-3', kind: 'filingCabinet', x: 21.8, y: 0, z: -17.5, rotationY: 0 },
+    { id: 'cab-4', kind: 'filingCabinet', x: 24.4, y: 0, z: -17.5, rotationY: 0 },
+    { id: 'safe-arch', kind: 'safe', x: 26.25, y: 0, z: -16.4, rotationY: -Math.PI / 2 },
+    { id: 'shelf-arch', kind: 'shelf', x: 26.3, y: 0, z: -12.7, rotationY: -Math.PI / 2 },
+    { id: 'map-arch', kind: 'mapBoard', x: 20.8, y: 1.7, z: -17.82, rotationY: 0 },
+    { id: 'note-archivo', kind: 'note', x: 18.2, y: 0.98, z: -12.86, rotationY: 0.2, noteId: 'archivo-turno' },
+    { id: 'note-psico', kind: 'note', x: 23.2, y: 0.98, z: -12.88, rotationY: -0.2, noteId: 'informe-psicologico' },
+    { id: 'body-arch', kind: 'body', x: 16.8, y: 0.12, z: -12.1, rotationY: 0.5 },
+    { id: 'tag-rios', kind: 'tag', x: 16.5, y: 0.55, z: -12.0, tagId: 'tag-rios' },
+    { id: 'fuse-arch', kind: 'fuse', x: 15.35, y: 1.3, z: -15.2, rotationY: Math.PI / 2, fuseId: 'fuse-archivo' },
+    { id: 'bottle-arch', kind: 'bottle', x: 22.4, y: 0.2, z: -17.0 },
+    { id: 'blood-arch', kind: 'blood', x: 17.2, y: 0.012, z: -11.9, rotationY: 0.8, size: 1.6 },
+    { id: 'puddle-arch', kind: 'puddle', x: 21.0, y: 0.02, z: -15.2, size: 1.4 },
+    { id: 'ext-arch', kind: 'extinguisher', x: 26.5, y: 0, z: -11.6, rotationY: -Math.PI / 2 },
+
+    // ---- CALDERAS ----
+    { id: 'light-boiler-1', kind: 'light', x: -35.0, y: 4.6, z: -3.0, intensity: 12, color: 0xc6d8c4, flicker: 0.4 },
+    { id: 'light-boiler-2', kind: 'light', x: -39.8, y: 4.6, z: -6.2, intensity: 8, color: 0xffbd7a, flicker: 0.2 },
+    { id: 'light-boiler-3', kind: 'light', x: -32.2, y: 4.6, z: 1.2, intensity: 0, color: 0xaab4a6, broken: true },
+    { id: 'light-boiler-work', kind: 'light', x: -33.4, y: 3.0, z: -1.4, intensity: 10, color: 0xd6e2cc, flicker: 0.3 },
+    { id: 'boiler-1', kind: 'boiler', x: -36.4, y: 0, z: -5.6, rotationY: 0.2, size: 1.6 },
+    { id: 'boiler-2', kind: 'boiler', x: -38.8, y: 0, z: -1.2, rotationY: -0.4, size: 1.3 },
+    { id: 'boiler-3', kind: 'boiler', x: -33.2, y: 0, z: -6.9, rotationY: 0.6, size: 1.0 },
+    { id: 'gauge-1', kind: 'gauge', x: -36.4, y: 1.5, z: -4.6, rotationY: 0 },
+    { id: 'gauge-2', kind: 'gauge', x: -38.8, y: 1.4, z: -0.2, rotationY: 0 },
+    { id: 'steam-vent-1', kind: 'steamVent', x: -39.9, y: 0, z: -7.6 },
+    { id: 'steam-vent-2', kind: 'steamVent', x: -33.4, y: 0, z: 2.2 },
+    { id: 'chain-1', kind: 'chain', x: -35.0, y: 4.7, z: -2.0, length: 3.6 },
+    { id: 'chain-2', kind: 'chain', x: -40.2, y: 4.7, z: 1.4, length: 4.0 },
+    { id: 'bodybag-1', kind: 'bodyBag', x: -40.6, y: 0.1, z: -7.4, rotationY: 0.6 },
+    { id: 'bodybag-2', kind: 'bodyBag', x: -32.4, y: 0.1, z: 1.4, rotationY: 2.2 },
+    { id: 'note-calderas', kind: 'note', x: -36.4, y: 0.9, z: -2.6, rotationY: 0.4, noteId: 'calderas-presion' },
+    { id: 'crate-boiler', kind: 'crate', x: -36.4, y: 0.4, z: -2.6, size: 0.8 },
+    { id: 'tag-vela', kind: 'tag', x: -40.2, y: 0.3, z: -7.1, tagId: 'tag-vela' },
+    { id: 'fuse-boiler', kind: 'fuse', x: -30.35, y: 1.3, z: -6.4, rotationY: -Math.PI / 2, fuseId: 'fuse-calderas' },
+    { id: 'bottle-boiler', kind: 'bottle', x: -32.2, y: 0.2, z: -4.0 },
+    { id: 'nest-boiler', kind: 'crawlerNest', x: -41.0, y: 0.15, z: -7.6 },
+    { id: 'puddle-boiler', kind: 'puddle', x: -37.0, y: 0.02, z: 1.8, size: 1.8 },
+    { id: 'blood-boiler', kind: 'blood', x: -39.8, y: 0.012, z: -6.4, rotationY: 0.7, size: 1.4 },
+    { id: 'pipe-boiler-1', kind: 'pipe', x: -36.0, y: 4.4, z: -8.7, axis: 'x', length: 11 },
+    { id: 'pipe-boiler-2', kind: 'pipe', x: -41.7, y: 2.2, z: -3.0, axis: 'z', length: 11 },
+    { id: 'locker-boiler', kind: 'hideLocker', x: -30.7, y: 0, z: -8.2, rotationY: -Math.PI / 2 },
+    { id: 'ext-boiler', kind: 'extinguisher', x: -41.6, y: 0, z: 2.2, rotationY: Math.PI / 2 },
+
+    // ---- CISTERNA ----
+    { id: 'light-cistern-1', kind: 'light', x: -27.0, y: 4.2, z: 7.0, intensity: 10, color: 0xc6d8c4, flicker: 0.5 },
+    { id: 'light-cistern-2', kind: 'light', x: -17.0, y: 4.2, z: 11.2, intensity: 7, color: 0xffbd7a, flicker: 0.3 },
+    { id: 'light-cistern-3', kind: 'light', x: -22.0, y: 4.2, z: 13.8, intensity: 0, color: 0xaab4a6, broken: true },
+    { id: 'pool-cistern', kind: 'pool', x: -22.5, y: 0.03, z: 9.0, size: 8.2 },
+    { id: 'well-valve', kind: 'wellValve', x: -29.6, y: 1.2, z: 9.0, rotationY: Math.PI / 2 },
+    { id: 'chain-3', kind: 'chain', x: -22.5, y: 4.4, z: 9.0, length: 4.2 },
+    { id: 'chain-4', kind: 'chain', x: -18.5, y: 4.4, z: 12.2, length: 3.6 },
+    { id: 'chain-5', kind: 'chain', x: -26.5, y: 4.4, z: 5.2, length: 3.0 },
+    { id: 'bodybag-3', kind: 'bodyBag', x: -27.9, y: 0.1, z: 10.8, rotationY: 0.8 },
+    { id: 'tag-duarte', kind: 'tag', x: -27.4, y: 0.3, z: 10.4, tagId: 'tag-duarte' },
+    { id: 'fuse-cistern', kind: 'fuse', x: -15.35, y: 1.3, z: 12.0, rotationY: -Math.PI / 2, fuseId: 'fuse-cisterna' },
+    { id: 'note-cisterna', kind: 'note', x: -17.0, y: 0.9, z: 5.4, rotationY: 0.3, noteId: 'cisterna-cadena' },
+    { id: 'crate-cistern-1', kind: 'crate', x: -17.0, y: 0.4, z: 5.4, size: 0.8 },
+    { id: 'note-carta', kind: 'note', x: -27.0, y: 0.9, z: 13.8, rotationY: -0.3, noteId: 'carta-sin-firma' },
+    { id: 'crate-cistern-2', kind: 'crate', x: -27.0, y: 0.4, z: 13.8, size: 0.8 },
+    { id: 'nest-cistern-1', kind: 'crawlerNest', x: -26.5, y: 0.15, z: 7.2 },
+    { id: 'nest-cistern-2', kind: 'crawlerNest', x: -18.2, y: 0.15, z: 11.0 },
+    { id: 'nest-cistern-3', kind: 'crawlerNest', x: -24.0, y: 0.15, z: 13.2 },
+    { id: 'bottle-cistern', kind: 'bottle', x: -18.5, y: 0.2, z: 5.0 },
+    { id: 'locker-cistern', kind: 'hideLocker', x: -29.1, y: 0, z: 4.4, rotationY: Math.PI / 2 },
+    { id: 'puddle-cistern-1', kind: 'puddle', x: -20.0, y: 0.02, z: 4.8, size: 1.6 },
+    { id: 'puddle-cistern-2', kind: 'puddle', x: -27.0, y: 0.02, z: 13.0, size: 1.4 },
+    { id: 'blood-cistern', kind: 'blood', x: -25.5, y: 0.012, z: 11.8, rotationY: 0.9, size: 1.8 },
+    { id: 'pipe-cistern', kind: 'pipe', x: -22.5, y: 4.1, z: 14.7, axis: 'x', length: 14 },
+    { id: 'cables-cistern', kind: 'cables', x: -19.0, y: 4.0, z: 9.5, length: 4.0 },
+    { id: 'drain-cistern', kind: 'drain', x: -22.5, y: 0.01, z: 9.0, size: 1.6 },
+    { id: 'ext-cistern', kind: 'extinguisher', x: -29.5, y: 0, z: 13.5, rotationY: Math.PI / 2 },
   ],
   nav: {
     nodes: [
@@ -464,6 +612,21 @@ export const LAYOUT: Layout = {
       { id: 'e1', x: -4.4, z: 18.2 },
       { id: 'e2', x: 4.4, z: 18.2 },
       { id: 'e3', x: 0, z: 20.6 },
+      { id: 'a0', x: 21.0, z: -12.6 },
+      { id: 'a1', x: 17.2, z: -15.5 },
+      { id: 'a2', x: 24.8, z: -15.5 },
+      { id: 'a3', x: 24.8, z: -12.4 },
+      { id: 'b0', x: -31.4, z: -3.0 },
+      { id: 'b1', x: -35.5, z: -6.5 },
+      { id: 'b2', x: -39.5, z: -2.0 },
+      { id: 'b3', x: -35.5, z: 1.2 },
+      { id: 'qdoor', x: -22.0, z: 3.6 },
+      { id: 'q0', x: -22.0, z: 4.6 },
+      { id: 'q1', x: -27.8, z: 6.8 },
+      { id: 'q2', x: -16.2, z: 6.8 },
+      { id: 'q3', x: -27.8, z: 12.2 },
+      { id: 'q4', x: -16.2, z: 12.2 },
+      { id: 'q5', x: -22.0, z: 13.8 },
     ],
     edges: [
       ['g0', 'g1'],
@@ -538,6 +701,44 @@ export const LAYOUT: Layout = {
       ['e3', 'e0'],
       ['e3', 'e1'],
       ['e3', 'e2'],
+      ['a0', 'a1'],
+      ['a1', 'a2'],
+      ['a2', 'a3'],
+      ['a3', 'a0'],
+      ['a1', 'a0'],
+      ['a2', 'a1'],
+      ['a3', 'a2'],
+      ['a0', 'a3'],
+      ['a0', 'w1'],
+      ['w1', 'a0'],
+      ['b0', 'b1'],
+      ['b1', 'b2'],
+      ['b2', 'b3'],
+      ['b3', 'b0'],
+      ['b1', 'b0'],
+      ['b2', 'b1'],
+      ['b3', 'b2'],
+      ['b0', 'b3'],
+      ['b0', 'p2'],
+      ['p2', 'b0'],
+      ['qdoor', 'q0'],
+      ['q0', 'qdoor'],
+      ['qdoor', 'p4'],
+      ['p4', 'qdoor'],
+      ['qdoor', 'p3'],
+      ['p3', 'qdoor'],
+      ['q0', 'q1'],
+      ['q1', 'q0'],
+      ['q1', 'q3'],
+      ['q3', 'q1'],
+      ['q3', 'q5'],
+      ['q5', 'q3'],
+      ['q5', 'q4'],
+      ['q4', 'q5'],
+      ['q4', 'q2'],
+      ['q2', 'q4'],
+      ['q2', 'q0'],
+      ['q0', 'q2'],
     ],
   },
 };
@@ -572,5 +773,8 @@ export const MONSTER_SETPIECES = {
   corridorPass: { x: -11.4, z: -3.4, yaw: Math.PI / 2 },
   lockerRoom: { x: 6.8, z: 7.4, yaw: Math.PI },
   substation: { x: 4.4, z: 18.2, yaw: -1.2 },
+  archivePeek: { x: 19.4, z: -16.4, yaw: 0.4 },
+  boilerPeek: { x: -36.2, z: -5.2, yaw: 1.2 },
+  cisternEmerge: { x: -22.5, z: 9.0, yaw: 0.1 },
   start: { x: -22.5, z: -7.0, yaw: 0 },
 };

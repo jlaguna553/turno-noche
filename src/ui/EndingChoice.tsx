@@ -42,11 +42,33 @@ export default function EndingChoice({ snapshot, onChoose }: EndingChoiceProps) 
             <span className="choice-sub">{ENDINGS.flood.subtitle}</span>
             <p>Abre la válvula de fondo. El pozo sube. Usted no sale. Él tampoco.</p>
           </button>
+
+          {snapshot?.secretUnlocked ? (
+            <button
+              type="button"
+              className="choice-card is-secret"
+              data-action="stay"
+              onClick={() => onChoose('stay')}
+            >
+              <span className="choice-index">C</span>
+              <strong>{ENDINGS.stay.title}</strong>
+              <span className="choice-sub">{ENDINGS.stay.subtitle}</span>
+              <p>Cierra la puerta desde dentro. Devuelve la llave. La planta le reconoce como relevo.</p>
+            </button>
+          ) : (
+            <div className="choice-card is-locked" aria-disabled="true">
+              <span className="choice-index">C</span>
+              <strong>???</strong>
+              <span className="choice-sub">SALIDA BLOQUEADA</span>
+              <p>Requiere las 3 placas de tripulación y los 3 fusibles de emergencia.</p>
+            </div>
+          )}
         </div>
 
         {snapshot && (
           <p className="tiny dim ending-stats">
-            NOTAS {snapshot.notes.length}/{snapshot.notesTotal} · SESIÓN {formatTime(snapshot.elapsed)} · MUERTES{' '}
+            NOTAS {snapshot.notes.length}/{snapshot.notesTotal} · FICHAS {snapshot.tags.length}/{snapshot.tagsTotal} ·
+            FUSIBLES {snapshot.fuses.length}/{snapshot.fusesTotal} · SESIÓN {formatTime(snapshot.elapsed)} · MUERTES{' '}
             {snapshot.deaths} · BREAKERS {Object.values(snapshot.breakers).filter(Boolean).length}/3
           </p>
         )}

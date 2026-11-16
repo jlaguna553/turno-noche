@@ -43,6 +43,7 @@ export default function Hud({
   const hearbeat = danger > 0.55 ? 'is-pounding' : danger > 0.28 ? 'is-tight' : '';
   const style = { '--danger': danger.toFixed(3) } as CSSProperties;
   const batteryLow = battery.charge < 18;
+  const side = snapshot.side;
 
   return (
     <div className={`hud ${hearbeat}`} style={style}>
@@ -59,6 +60,12 @@ export default function Hud({
           ))}
           <b>
             {objective.progress}/{objective.total}
+          </b>
+        </div>
+        <div className={`side-objective ${side.id === 'done' ? 'is-done' : ''}`}>
+          <span>{side.title}</span>
+          <b>
+            {side.progress}/{side.total}
           </b>
         </div>
       </header>
@@ -78,7 +85,16 @@ export default function Hud({
         </div>
         <div className="status-row">
           <span>NOTAS {snapshot.notes.length}/{snapshot.notesTotal}</span>
+          <span>FICHAS {snapshot.tags.length}/{snapshot.tagsTotal}</span>
+        </div>
+        <div className="status-row">
+          <span>FUSIBLES {snapshot.fuses.length}/{snapshot.fusesTotal}</span>
           <span>MUERTES {snapshot.deaths}</span>
+        </div>
+        <div className={`bottles ${snapshot.bottles === 0 ? 'is-empty' : ''}`}>
+          <span>BOTELLAS</span>
+          <b>{snapshot.bottles}</b>
+          <em>[Q] lanzar</em>
         </div>
         <button type="button" className="hud-pause" onClick={onPause} aria-label="Pausa">
           II
@@ -116,6 +132,16 @@ export default function Hud({
 
       {hidden && <div className="hide-mask" aria-hidden="true" />}
 
+      {snapshot.latched && (
+        <>
+          <div className="latch-overlay" aria-hidden="true" />
+          <div className="latch-prompt" role="alert">
+            <strong>SE TE HA PEGADO A LA CARA</strong>
+            <span>[E] ARRÁNCALA · NO CORRAS</span>
+          </div>
+        </>
+      )}
+
       {hidden && (
         <div className="hidden-prompt">
           <p>ESCONDIDO</p>
@@ -134,7 +160,7 @@ export default function Hud({
         {touch ? (
           <span>STICK: MOVER · ARRASTRE: MIRAR · USAR: INTERACTUAR</span>
         ) : (
-          <span>WASD MOVER · E INTERACTUAR · F LINTERNA · TAB DIARIO · ESC PAUSA</span>
+          <span>WASD MOVER · E INTERACTUAR · F LINTERNA · Q LANZAR · TAB DIARIO · ESC PAUSA</span>
         )}
         <span className="fps">{fps} FPS</span>
       </footer>

@@ -1,7 +1,7 @@
 {
   "name": "turno-noche",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "TURNO NOCHE: juego de terror en primera persona, PWA instalable y offline. Three.js + Rapier, arte y audio 100% procedurales.",
   "scripts": {

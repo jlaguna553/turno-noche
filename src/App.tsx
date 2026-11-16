@@ -25,7 +25,7 @@ interface SubtitleState {
 
 interface ToastItem {
   id: number;
-  kind: 'info' | 'warning' | 'note';
+  kind: 'info' | 'warning' | 'note' | 'crew' | 'fuse';
   title: string;
   body: string;
 }
@@ -112,6 +112,16 @@ export default function App() {
         pushToast({ kind: 'note', title: note.title, body: `${note.author} · ${total}/${max}` });
         refreshSnapshot();
       }),
+      bus.on('tag:found', ({ tag, total, max }) => {
+        pushToast({ kind: 'crew', title: `PLACA · ${tag.name}`, body: `${tag.role} · ${total}/${max}` });
+        refreshSnapshot();
+      }),
+      bus.on('fuse:found', ({ fuse, total, max }) => {
+        pushToast({ kind: 'fuse', title: fuse.label, body: `${total}/${max} fusibles` });
+        refreshSnapshot();
+      }),
+      bus.on('bottles:change', () => refreshSnapshot()),
+      bus.on('latch:change', () => refreshSnapshot()),
       bus.on('toast', (next) => pushToast(next)),
       bus.on('death', (next) => {
         overlayRef.current = true;
@@ -401,6 +411,7 @@ export default function App() {
         <TouchControls
           hidden={hidden}
           flashlightOn={battery.on}
+          bottles={snapshot?.bottles ?? 0}
           onStick={(x, y) => engineRef.current?.setStick(x, y)}
           onLook={(dx, dy) => engineRef.current?.addLook(dx, dy)}
           onTap={(action) => engineRef.current?.tapButton(action)}

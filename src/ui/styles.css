@@ -1488,7 +1488,7 @@ h3 {
   line-height: 1.8;
   color: #b8ad99;
   opacity: 0;
-  animation: line-in 1.4s ease forwards;
+  animation: line-in 1s ease forwards;
 }
 
 .ending-summary {
@@ -2093,5 +2093,338 @@ h3 {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* ------------------------------------------------------------ v1.1 */
+
+.side-objective {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  padding-top: 0.38rem;
+  border-top: 1px dashed rgba(214, 205, 185, 0.14);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+.side-objective b {
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.side-objective.is-done {
+  color: var(--vera);
+}
+
+.side-objective.is-done b {
+  color: var(--vera);
+}
+
+.bottles {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.54rem;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+
+.bottles b {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.bottles em {
+  font-style: normal;
+  font-size: 0.48rem;
+  color: var(--faint);
+}
+
+.bottles.is-empty b {
+  color: var(--alert);
+}
+
+.latch-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 38%, transparent 12%, rgba(124, 27, 18, 0.5) 62%, rgba(40, 4, 2, 0.8) 100%);
+  animation: latch-pulse 0.5s ease-in-out infinite;
+}
+
+.latch-prompt {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  z-index: 13;
+  text-align: center;
+  border: 1px solid var(--alert);
+  background: rgba(30, 4, 2, 0.88);
+  padding: 0.9rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  animation: latch-shake 0.14s steps(2) infinite;
+  box-shadow: 0 0 60px rgba(255, 61, 44, 0.25);
+}
+
+.latch-prompt strong {
+  font-family: var(--display);
+  font-size: 1.2rem;
+  letter-spacing: 0.08em;
+  color: #ffe1d8;
+}
+
+.latch-prompt span {
+  font-size: 0.56rem;
+  letter-spacing: 0.24em;
+  color: var(--alert);
+}
+
+.journal-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin: 0.2rem 0 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.journal-tabs button {
+  appearance: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--faint);
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  padding: 0.5rem 0.7rem;
+  text-transform: uppercase;
+}
+
+.journal-tabs button:hover {
+  color: var(--ink);
+}
+
+.journal-tabs button.is-selected {
+  color: var(--ink);
+  border-bottom-color: var(--alert);
+}
+
+.crew-section {
+  grid-column: 1 / -1;
+  margin-bottom: 0.8rem;
+}
+
+.crew-grid,
+.bestiary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.7rem;
+}
+
+.crew-card,
+.bestiary-card {
+  border: 1px solid rgba(214, 205, 185, 0.13);
+  background: linear-gradient(180deg, rgba(28, 26, 20, 0.32), rgba(8, 9, 8, 0.45));
+  padding: 0.9rem;
+}
+
+.crew-card.is-found {
+  border-left: 2px solid var(--amber);
+}
+
+.bestiary-card.is-found {
+  border-left: 2px solid var(--vera);
+}
+
+.crew-card:not(.is-found),
+.bestiary-card:not(.is-found) {
+  opacity: 0.62;
+}
+
+.crew-role {
+  display: block;
+  margin: -0.2rem 0 0.55rem;
+  font-size: 0.52rem;
+  letter-spacing: 0.22em;
+  color: var(--amber);
+}
+
+.crew-card p,
+.bestiary-card p {
+  margin: 0 0 0.5rem;
+  font-size: 0.66rem;
+  line-height: 1.7;
+  color: #b4aa96;
+}
+
+.fuse-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.fuse-chip {
+  flex: 1 1 12rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.58rem;
+  color: var(--faint);
+}
+
+.fuse-chip.is-found {
+  color: var(--ink);
+  border-color: rgba(166, 201, 168, 0.4);
+}
+
+.fuse-chip span {
+  color: var(--vera);
+  font-size: 0.8rem;
+}
+
+.fuse-chip b {
+  display: block;
+  font-weight: 500;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+}
+
+.fuse-chip em {
+  font-style: normal;
+  font-size: 0.5rem;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.choice-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.choice-card.is-secret {
+  border-color: rgba(166, 201, 168, 0.45);
+}
+
+.choice-card.is-secret:hover {
+  border-color: var(--vera);
+  background: linear-gradient(180deg, rgba(24, 40, 30, 0.85), rgba(6, 12, 8, 0.9));
+}
+
+.choice-card.is-locked {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.touch-btn.is-disabled {
+  opacity: 0.4;
+}
+
+.toast-crew {
+  border-left-color: var(--amber);
+}
+
+.toast-fuse {
+  border-left-color: var(--vera);
+}
+
+@keyframes latch-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes latch-shake {
+  0% {
+    transform: translate(-50%, -50%) translate(-2px, 1px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translate(2px, -1px);
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(-1px, 0);
+  }
+}
+
+@media (max-width: 760px) {
+  .choice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 560px) {
+  .choice-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+  }
+
+  .choice-card p {
+    display: none;
+  }
+
+  .choice-card strong {
+    font-size: 0.95rem;
+  }
+
+  .journal-body {
+    grid-template-columns: 1fr;
+    max-height: 58vh;
+    overflow: auto;
+  }
+
+  .journal-tabs button {
+    padding: 0.4rem 0.45rem;
+    font-size: 0.52rem;
+  }
+
+  .latch-prompt {
+    padding: 0.55rem 1rem;
+  }
+
+  .latch-prompt strong {
+    font-size: 0.9rem;
+  }
+
+  .bottles em {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .journal-card {
+    width: min(96vw, 46rem);
+  }
+
+  .crew-grid,
+  .bestiary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-body {
+    max-height: 60vh;
+    overflow: auto;
+  }
+}
+
+@media (max-height: 560px) {
+  .title-content .lede {
+    font-size: 0.66rem;
+    line-height: 1.55;
   }
 }

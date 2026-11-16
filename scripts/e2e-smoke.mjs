@@ -22,8 +22,10 @@ mkdirSync(OUT, { recursive: true });
 
 const failures = [];
 const consoleErrors = [];
+let checks = 0;
 
 function check(condition, label) {
+  checks += 1;
   if (condition) {
     console.log(`  ok   ${label}`);
   } else {
@@ -102,6 +104,9 @@ async function main() {
   const state0 = await page.evaluate(() => window.__turnoNoche.state());
   check(state0.snapshot.objective.id === 'breakers', 'objetivo inicial: rearmar breakers');
   check(state0.snapshot.notes.length === 0, 'sin notas al empezar');
+  check(state0.snapshot.tags.length === 0 && state0.snapshot.fuses.length === 0, 'sin fichas ni fusibles al empezar');
+  check(state0.snapshot.bottles === 3, 'la partida arranca con tres botellas');
+  check(state0.snapshot.side.id === 'fuses', 'el HUD muestra el objetivo secundario de fusibles');
   check(!state0.dead, 'el jugador esta vivo');
 
   console.log('2. Nota, diario y escondite');
@@ -124,12 +129,92 @@ async function main() {
   await page.keyboard.press('Tab');
   await page.waitForTimeout(600);
 
+  console.log('2b. Contenido v1.1: archivo, placa, fusible, botella y cria');
+  await page.evaluate(() => window.__turnoNoche.freeze(true));
+  await page.evaluate(() => {
+    window.__turnoNoche.teleport(18.2, -11.4, 0);
+    window.__turnoNoche.look(0, -0.5);
+  });
+  await page.waitForSelector('.focus-prompt', { timeout: 15000 }).catch(() => undefined);
+  await page.keyboard.press('e');
+  await page.waitForTimeout(700);
+  const archiveNote = await page.evaluate(() => window.__turnoNoche.state());
+  check(archiveNote.snapshot.notes.includes('archivo-turno'), 'la nota del archivo se recoge');
+
+  await page.evaluate(() => {
+    window.__turnoNoche.teleport(16.5, -13.6, Math.PI);
+    window.__turnoNoche.look(Math.PI, -0.7);
+  });
+  await page.waitForSelector('.focus-prompt', { timeout: 15000 }).catch(() => undefined);
+  const tagFocus = await page.evaluate(() => document.querySelector('.focus-prompt')?.textContent ?? '');
+  check(tagFocus.includes('placa') || tagFocus.includes('PLACA'), `la placa de Ríos se enfoca (${tagFocus.trim() || 'sin foco'})`);
+  await page.keyboard.press('e');
+  await page.waitForTimeout(800);
+  const tagState = await page.evaluate(() => window.__turnoNoche.state());
+  check(tagState.snapshot.tags.includes('tag-rios'), 'la placa de Ríos se recoge con E');
+
+  await page.evaluate(() => {
+    window.__turnoNoche.teleport(17.2, -15.2, Math.PI / 2);
+    window.__turnoNoche.look(Math.PI / 2, -0.2);
+  });
+  await page.waitForSelector('.focus-prompt', { timeout: 15000 }).catch(() => undefined);
+  await page.keyboard.press('e');
+  await page.waitForTimeout(900);
+  const fuseState = await page.evaluate(() => window.__turnoNoche.state());
+  check(fuseState.snapshot.fuses.includes('fuse-archivo'), 'el fusible F1 se extrae con E');
+  check(fuseState.snapshot.side.progress === 1, 'el objetivo secundario avanza a 1/3');
+  await page.screenshot({ path: join(OUT, '04c-archivo.png') });
+
+  await page.keyboard.press('Tab');
+  await page.waitForSelector('.journal-overlay', { timeout: 12000 });
+  await page.locator('.journal-tabs button', { hasText: 'TRIPULACIÓN' }).click();
+  await page.waitForTimeout(600);
+  const crewText = await page.locator('.journal-card').innerText();
+  check(crewText.includes('T. RÍOS') && crewText.includes('FUSIBLE F1'), 'el diario muestra ficha y fusible');
+  await page.locator('.journal-tabs button', { hasText: 'BESTIARIO' }).click();
+  await page.waitForTimeout(600);
+  const bestiaryText = await page.locator('.journal-card').innerText();
+  check(bestiaryText.includes('EL HUÉSPED'), 'el bestiario se desbloquea con las notas');
+  await page.screenshot({ path: join(OUT, '04d-bestiary.png') });
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(500);
+
+  await page.evaluate(() => {
+    window.__turnoNoche.teleport(21, -14, Math.PI);
+    window.__turnoNoche.look(Math.PI, 0);
+    window.__turnoNoche.bottles(3);
+  });
+  await page.waitForTimeout(500);
+  await page.keyboard.press('q');
+  await page.waitForFunction(() => Boolean(window.__turnoNoche.state().lure), null, { timeout: 20000 }).catch(() => undefined);
+  const thrown = await page.evaluate(() => window.__turnoNoche.state());
+  check(thrown.snapshot.bottles === 2, 'la botella se lanza y descuenta inventario');
+  check(Boolean(thrown.lure), 'el cristal roto fija un señuelo para la criatura');
+
+  await page.evaluate(() => {
+    window.__turnoNoche.teleport(-22.5, 6.5, Math.PI);
+    window.__turnoNoche.look(Math.PI, 0);
+    window.__turnoNoche.latch();
+  });
+  await page.waitForTimeout(900);
+  const latched = await page.evaluate(() => window.__turnoNoche.state());
+  check(latched.snapshot.latched, 'una cría se engancha a la cara');
+  await page.screenshot({ path: join(OUT, '04e-latch.png') });
+  await page.keyboard.press('e');
+  await page.waitForTimeout(700);
+  const unlatched = await page.evaluate(() => window.__turnoNoche.state());
+  check(!unlatched.snapshot.latched, 'E arranca la cría de la cara');
+  await page.evaluate(() => window.__turnoNoche.freeze(false));
+
   console.log('3. Sala de bombas: susto y B1 con E real');
   await page.evaluate(() => {
     window.__turnoNoche.teleport(-20.5, -4.5, Math.PI / 2);
     window.__turnoNoche.look(Math.PI / 2, -0.05);
   });
-  await page.waitForTimeout(1600);
+  await page
+    .waitForFunction(() => window.__turnoNoche.state().zone === 'sala-bombas', null, { timeout: 20000 })
+    .catch(() => undefined);
+  await page.waitForTimeout(600);
   await page.screenshot({ path: join(OUT, '04-pump-glimpse.png') });
   const glimpse = await page.evaluate(() => window.__turnoNoche.state());
   check(glimpse.zone === 'sala-bombas', 'se detecta la zona sala-bombas');
@@ -179,12 +264,16 @@ async function main() {
   const unhidden = await page.evaluate(() => window.__turnoNoche.state());
   check(!unhidden.hidden, 'puede salir de la taquilla');
 
-  console.log('5. Breakers restantes y climax');
+  console.log('5. Breakers restantes, tercer final y climax');
   await page.evaluate(() => window.__turnoNoche.breakers(3));
-  await page.waitForTimeout(1800);
+  await page.waitForTimeout(1600);
+  await page.evaluate(() => window.__turnoNoche.collectAll());
+  await page.waitForTimeout(1600);
   const all = await page.evaluate(() => window.__turnoNoche.state());
   check(all.snapshot.liftUnlocked, 'los tres breakers desbloquean el montacargas');
   check(all.snapshot.objective.id === 'return', 'el objetivo pasa a volver al montacargas');
+  check(all.snapshot.tags.length === 3 && all.snapshot.fuses.length === 3, 'se recogen las tres fichas y los tres fusibles');
+  check(all.snapshot.secretUnlocked, 'fichas y fusibles desbloquean la tercera salida');
   await page.screenshot({ path: join(OUT, '08-climax-rojo.png') });
 
   console.log('6. Decision final y persistencia');
@@ -204,12 +293,13 @@ async function main() {
   await page.keyboard.press('e');
   await page.waitForSelector('.ending-choice', { timeout: 15000 });
   await page.waitForTimeout(900);
+  check(await page.locator('[data-action="stay"]').count() === 1, 'el tercer final aparece desbloqueado');
   await page.screenshot({ path: join(OUT, '09-eleccion.png') });
-  await page.locator('[data-action="ascend"]').click();
+  await page.locator('[data-action="stay"]').click();
   await page.waitForSelector('.ending-screen', { timeout: 15000 });
   await page.waitForTimeout(1200);
   const endingText = await page.locator('.ending-screen').innerText();
-  check(endingText.includes('SUBIR'), 'el final A se muestra');
+  check(endingText.includes('QUEDARSE'), 'el final C se muestra');
   check(endingText.includes('NOTAS'), 'el final incluye estadisticas');
   await page.screenshot({ path: join(OUT, '10-final.png') });
 
@@ -264,7 +354,13 @@ async function main() {
   await startGame(page3, { touch: true });
   check(await page3.locator('.touch-ui').isVisible(), 'controles tactiles visibles');
   check(await page3.locator('.stick').isVisible(), 'stick visible');
+  check(await page3.locator('.touch-btn', { hasText: 'LANZAR' }).isVisible(), 'boton LANZAR visible');
   await page3.screenshot({ path: join(OUT, '13-movil.png') });
+  const mobileBottles = await page3.evaluate(() => window.__turnoNoche.state().snapshot.bottles);
+  await page3.locator('.touch-btn', { hasText: 'LANZAR' }).click();
+  await page3.waitForTimeout(700);
+  const mobileBottlesAfter = await page3.evaluate(() => window.__turnoNoche.state().snapshot.bottles);
+  check(mobileBottlesAfter === mobileBottles - 1, 'LANZAR tactil descuenta una botella');
   const mobileBefore = await page3.evaluate(() => window.__turnoNoche.state().snapshot.flashlightOn);
   await page3.locator('.touch-btn', { hasText: 'LINTERNA' }).click();
   await page3.waitForTimeout(600);
@@ -288,7 +384,7 @@ async function main() {
 
   console.log(`\nFallos: ${failures.length}`);
   if (failures.length > 0 || filtered.length > 0) process.exit(1);
-  console.log('QA E2E: OK');
+  console.log(`QA E2E: ${checks} comprobaciones, 0 fallos`);
 }
 
 main().catch((error) => {

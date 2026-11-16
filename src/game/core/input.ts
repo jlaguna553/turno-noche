@@ -8,6 +8,7 @@ export type Action =
   | 'sprint'
   | 'use'
   | 'flashlight'
+  | 'throw'
   | 'journal';
 
 const KEY_MAP: Record<string, Action> = {
@@ -27,6 +28,7 @@ const KEY_MAP: Record<string, Action> = {
   KeyC: 'crouch',
   KeyE: 'use',
   KeyF: 'flashlight',
+  KeyQ: 'throw',
   Tab: 'journal',
 };
 

@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 interface TouchControlsProps {
   hidden: boolean;
   flashlightOn: boolean;
+  bottles: number;
   onStick: (x: number, y: number) => void;
   onLook: (dx: number, dy: number) => void;
-  onTap: (action: 'use' | 'flashlight') => void;
+  onTap: (action: 'use' | 'flashlight' | 'throw') => void;
   onHold: (action: 'sprint' | 'crouch', held: boolean) => void;
   onJournal: () => void;
   onPause: () => void;
@@ -17,6 +18,7 @@ const STICK_RADIUS = 46;
 export default function TouchControls({
   hidden,
   flashlightOn,
+  bottles,
   onStick,
   onLook,
   onTap,
@@ -164,6 +166,16 @@ export default function TouchControls({
           </button>
         </div>
         <div className="touch-row">
+          <button
+            type="button"
+            className={`touch-btn touch-btn-small ${bottles === 0 ? 'is-disabled' : ''}`}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              onTap('throw');
+            }}
+          >
+            LANZAR {bottles}
+          </button>
           <button
             type="button"
             className="touch-btn touch-btn-small"

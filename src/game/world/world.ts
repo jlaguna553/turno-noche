@@ -36,6 +36,21 @@ import {
   createShelf,
   createTransformer,
   createValve,
+  createTag,
+  createFuse,
+  createBottlePickup,
+  createFilingCabinet,
+  createSafe,
+  createMapBoard,
+  createTypewriter,
+  createSteamVent,
+  createChain,
+  createBodyBag,
+  createPool,
+  createWellValve,
+  createCrawlerNest,
+  createBoiler,
+  createGauge,
   type BatteryActor,
   type BreakerActor,
   type LightActor,
@@ -44,6 +59,10 @@ import {
   type NoteActor,
   type PropContext,
   type RadioActor,
+  type TagActor,
+  type FuseActor,
+  type BottleActor,
+  type SteamActor,
 } from './props';
 import { createMonster, type MonsterActor } from './monster';
 
@@ -53,6 +72,12 @@ export interface World {
   breakers: Map<BreakerId, BreakerActor>;
   lockers: Map<string, LockerActor>;
   notes: Map<string, NoteActor>;
+  tags: Map<string, TagActor>;
+  fuses: Map<string, FuseActor>;
+  bottles: BottleActor[];
+  steam: Map<string, SteamActor>;
+  chairs: Map<string, THREE.Group>;
+  nests: Array<{ id: string; x: number; z: number }>;
   batteries: BatteryActor[];
   lift: LiftActor;
   radio: RadioActor;
@@ -62,6 +87,7 @@ export interface World {
   setLiftOpen(open: boolean): void;
   setPower(on: boolean): void;
   setEmergency(on: boolean): void;
+  restoreLighting(): void;
   flicker(seconds: number): void;
   blackout(seconds: number): void;
   setFlashlight(camera: THREE.Camera, on: boolean, strength: number): void;
@@ -107,6 +133,12 @@ export function buildWorld(
   const breakers = new Map<BreakerId, BreakerActor>();
   const lockers = new Map<string, LockerActor>();
   const notes = new Map<string, NoteActor>();
+  const tags = new Map<string, TagActor>();
+  const fuses = new Map<string, FuseActor>();
+  const bottles: BottleActor[] = [];
+  const steam = new Map<string, SteamActor>();
+  const chairs = new Map<string, THREE.Group>();
+  const nests: Array<{ id: string; x: number; z: number }> = [];
   const batteries: BatteryActor[] = [];
   let lift: LiftActor | null = null;
   let radio: RadioActor | null = null;
@@ -231,6 +263,86 @@ export function buildWorld(
         notes.set(spec.noteId ?? spec.id, actor);
         break;
       }
+      case 'tag': {
+        const actor = createTag(context, spec);
+        entities.add(actor.entity);
+        tags.set(spec.tagId ?? spec.id, actor);
+        break;
+      }
+      case 'fuse': {
+        const actor = createFuse(context, spec);
+        entities.add(actor.entity);
+        fuses.set(spec.fuseId ?? spec.id, actor);
+        break;
+      }
+      case 'bottle': {
+        const actor = createBottlePickup(context, spec);
+        entities.add(actor.entity);
+        bottles.push(actor);
+        break;
+      }
+      case 'steamVent': {
+        const actor = createSteamVent(context, spec);
+        steam.set(spec.id, actor);
+        meshCount += 1;
+        break;
+      }
+      case 'crawlerNest': {
+        createCrawlerNest(context, spec);
+        nests.push({ id: spec.id, x: spec.x, z: spec.z });
+        meshCount += 1;
+        break;
+      }
+      case 'pool': {
+        createPool(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'wellValve': {
+        createWellValve(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'filingCabinet': {
+        createFilingCabinet(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'safe': {
+        createSafe(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'mapBoard': {
+        createMapBoard(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'typewriter': {
+        createTypewriter(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'chain': {
+        createChain(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'bodyBag': {
+        createBodyBag(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'boiler': {
+        createBoiler(context, spec);
+        meshCount += 1;
+        break;
+      }
+      case 'gauge': {
+        createGauge(context, spec);
+        meshCount += 1;
+        break;
+      }
       case 'battery': {
         const actor = createBatteryPickup(context, spec);
         entities.add(actor.entity);
@@ -322,10 +434,12 @@ export function buildWorld(
         createDesk(context, spec);
         meshCount += 1;
         break;
-      case 'chair':
-        createChair(context, spec);
+      case 'chair': {
+        const chair = createChair(context, spec);
+        chairs.set(spec.id, chair);
         meshCount += 1;
         break;
+      }
       case 'bench':
         createBench(context, spec);
         meshCount += 1;
@@ -372,6 +486,12 @@ export function buildWorld(
     breakers,
     lockers,
     notes,
+    tags,
+    fuses,
+    bottles,
+    steam,
+    chairs,
+    nests,
     batteries,
     lift: liftActor,
     radio: radioActor,
@@ -390,6 +510,11 @@ export function buildWorld(
     setEmergency(on: boolean): void {
       emergency = on;
       for (const light of lights) light.emergency = on;
+    },
+    restoreLighting(): void {
+      world.setPower(true);
+      world.setEmergency(false);
+      flickerTimer = 0.6;
     },
     flicker(seconds: number): void {
       flickerTimer = Math.max(flickerTimer, seconds);
@@ -424,6 +549,10 @@ export function buildWorld(
         }
       }
       for (const battery of batteries) battery.update(dt, elapsed);
+      for (const bottle of bottles) bottle.update(elapsed);
+      for (const tag of tags.values()) tag.update(elapsed);
+      for (const fuse of fuses.values()) fuse.update(elapsed);
+      for (const vent of steam.values()) vent.update(dt, elapsed);
       for (const locker of lockers.values()) locker.update(dt);
       for (const breaker of breakers.values()) breaker.update(dt, elapsed);
       liftActor.update(dt);

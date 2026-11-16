@@ -4,13 +4,16 @@ import { DEFAULT_SETTINGS } from './bus';
 const SAVE_KEY = 'turnonoche.save.v1';
 const SETTINGS_KEY = 'turnonoche.settings.v1';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface RunSave {
   version: number;
   savedAt: number;
   breakers: Record<BreakerId, boolean>;
   notes: string[];
+  tags: string[];
+  fuses: string[];
+  bottles: number;
   elapsed: number;
   deaths: number;
   ending: EndingId | null;
@@ -40,13 +43,18 @@ export function loadRun(): RunSave | null {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<RunSave>;
-    if (!parsed || parsed.version !== SAVE_VERSION) return null;
+    if (!parsed || typeof parsed.version !== 'number') return null;
+    // v1 -> v2: fichas, fusibles y botellas se anaden con valores por defecto.
+    if (parsed.version !== 1 && parsed.version !== SAVE_VERSION) return null;
     if (!parsed.breakers || !Array.isArray(parsed.notes)) return null;
     return {
-      version: parsed.version,
+      version: SAVE_VERSION,
       savedAt: parsed.savedAt ?? Date.now(),
       breakers: parsed.breakers as Record<BreakerId, boolean>,
       notes: parsed.notes.filter((id): id is string => typeof id === 'string'),
+      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((id): id is string => typeof id === 'string') : [],
+      fuses: Array.isArray(parsed.fuses) ? parsed.fuses.filter((id): id is string => typeof id === 'string') : [],
+      bottles: typeof parsed.bottles === 'number' ? Math.max(0, Math.min(9, parsed.bottles)) : 3,
       elapsed: typeof parsed.elapsed === 'number' ? parsed.elapsed : 0,
       deaths: typeof parsed.deaths === 'number' ? parsed.deaths : 0,
       ending: parsed.ending ?? null,
